@@ -13,8 +13,8 @@ done
 
 mkdir -p "$OUT"
 : > "$OUT/source-integration.log"
-: > "$OUT/xash-r10-configure.log"
-: > "$OUT/xash-r10-build.log"
+: > "$OUT/xash-r11-configure.log"
+: > "$OUT/xash-r11-build.log"
 : > "$OUT/rom-packaging.log"
 
 # Feed Waf the libdragon compiler directly. We intentionally do not patch
@@ -54,7 +54,7 @@ export PATH="$TOOLWRAP:$PATH"
     objcopy --version | head -n 1
 } | tee "$OUT/tool-selection.txt"
 
-python3 "$ROOT/scripts/apply-n64-port.py" "$XASH" | tee "$OUT/source-integration.log"
+python3 "$ROOT/scripts/apply-n64-port.py" "$XASH" 2>&1 | tee "$OUT/source-integration.log"
 
 cd "$XASH"
 ./waf distclean >/dev/null 2>&1 || true
@@ -67,24 +67,24 @@ set +e
     --enable-bundled-deps \
     --low-memory-mode=1 \
     --disable-rpath \
-    --disable-werror 2>&1 | tee "$OUT/xash-r10-configure.log"
+    --disable-werror 2>&1 | tee "$OUT/xash-r11-configure.log"
 config_rc=${PIPESTATUS[0]}
 set -e
 if (( config_rc != 0 )); then
-    echo "Xash r10 reached a real N64 configure frontier (exit $config_rc)." >&2
+    echo "Xash r11 reached a real N64 configure frontier (exit $config_rc)." >&2
     exit "$config_rc"
 fi
 
 set +e
-./waf build -j2 -v 2>&1 | tee "$OUT/xash-r10-build.log"
+./waf build -j2 -v 2>&1 | tee "$OUT/xash-r11-build.log"
 build_rc=${PIPESTATUS[0]}
 set -e
 if (( build_rc != 0 )); then
-    echo "Xash r10 reached a real N64 compile/link frontier (exit $build_rc)." >&2
+    echo "Xash r11 reached a real N64 compile/link frontier (exit $build_rc)." >&2
     exit "$build_rc"
 fi
 
 ELF=$(find build -type f -name xash -print -quit)
 [[ -n "$ELF" && -f "$ELF" ]] || { echo "ERROR: Waf completed but no xash ELF was found" >&2; exit 1; }
-cp "$ELF" "$OUT/xash64-n64-r10.elf"
-"$ROOT/scripts/package-xash-rom.sh" "$OUT/xash64-n64-r10.elf" "$OUT/xash64-n64-r10.z64" | tee "$OUT/rom-packaging.log"
+cp "$ELF" "$OUT/xash64-n64-r11.elf"
+"$ROOT/scripts/package-xash-rom.sh" "$OUT/xash64-n64-r11.elf" "$OUT/xash64-n64-r11.z64" | tee "$OUT/rom-packaging.log"

@@ -1,4 +1,4 @@
-name: Build xash64-n64 r10 engine bring-up
+name: Build xash64-n64 r11 engine bring-up
 
 on:
   push:
@@ -63,7 +63,7 @@ jobs:
               make -C upstream/libdragon -j2 clobber
               make -C upstream/libdragon -j2 libdragon tools
               make -C upstream/libdragon -j2 install tools-install
-              "$PWD/scripts/build-xash-r10.sh" "$PWD/upstream/xash3d-fwgs" "$PWD/out"
+              "$PWD/scripts/build-xash-r11.sh" "$PWD/upstream/xash3d-fwgs" "$PWD/out"
             '
 
       - name: Capture source diff and toolchain provenance
@@ -71,15 +71,15 @@ jobs:
         run: |
           set +e
           mkdir -p out
-          git -C upstream/xash3d-fwgs diff -- . ':(exclude)3rdparty/library_suffix' > out/xash-r10-source.diff
-          git -C upstream/xash3d-fwgs/3rdparty/library_suffix diff > out/library-suffix-r10-source.diff
+          git -C upstream/xash3d-fwgs diff -- . ':(exclude)3rdparty/library_suffix' > out/xash-r11-source.diff
+          git -C upstream/xash3d-fwgs/3rdparty/library_suffix diff > out/library-suffix-r11-source.diff
           docker run --rm ghcr.io/dragonminded/libdragon:latest bash -lc '/n64_toolchain/bin/mips64-elf-gcc --version | head -n 1' > out/toolchain-version.txt 2>&1
-          if test -f out/xash64-n64-r10.z64; then sha256sum out/xash64-n64-r10.z64 | tee out/rom-sha256.txt; fi
+          if test -f out/xash64-n64-r11.z64; then sha256sum out/xash64-n64-r11.z64 | tee out/rom-sha256.txt; fi
 
-      - name: Upload r10 ROM or first-frontier diagnostics
+      - name: Upload r11 ROM or first-frontier diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: xash64-n64-r10
+          name: xash64-n64-r11
           path: out/
           if-no-files-found: error

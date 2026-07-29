@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ELF=${1:?usage: package-xash-rom.sh /path/to/xash.elf [output.z64]}
-OUT=${2:-xash64-n64-r10.z64}
+OUT=${2:-xash64-n64-r11.z64}
 : "${N64_INST:?N64_INST must point to the libdragon toolchain root}"
 
 BIN="$N64_INST/bin"
@@ -21,7 +21,7 @@ cp "$WORK/xash.elf" "$WORK/xash.stripped"
 "${TRIP}strip" -s "$WORK/xash.stripped"
 "$BIN/n64elfcompress" -o "$WORK" -c 1 "$WORK/xash.stripped"
 rm -f "$OUT"
-"$BIN/n64tool" --title "Xash64 Uplink r10" --toc --output "$OUT" \
+"$BIN/n64tool" --title "Xash64 Uplink r11" --toc --output "$OUT" \
     --align 256 "$WORK/xash.stripped" --align 8 "$WORK/xash.sym" --align 8
 printf 'ROM: %s\n' "$OUT"
 sha256sum "$OUT"

@@ -5,12 +5,12 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-with tempfile.TemporaryDirectory(prefix="xash64-r10-test-") as td:
+with tempfile.TemporaryDirectory(prefix="xash64-r11-test-") as td:
     x = Path(td) / "xash"
     (x / "engine/platform").mkdir(parents=True)
     (x / "3rdparty/library_suffix/include").mkdir(parents=True)
 
-    (x / "wscript").write_text("""\
+    (x / "wscript").write_text("""\\
 def options(opt):
 \tgrp = opt.add_option_group('Common options')
 \tgrp.add_option('-d', '--dedicated', action = 'store_true', dest = 'DEDICATED', default = False,
@@ -24,15 +24,34 @@ def configure(conf):
 \t\tconf.options.BUILD_BUNDLED_DEPS = True
 \tif conf.options.ENABLE_RPATH and conf.env.DEST_OS not in ['nswitch', 'psvita']:
 \t\tpass
+
 \tconf.env.GAMEDIR = conf.options.GAMEDIR
 \tconf.define('XASH_GAMEDIR', conf.options.GAMEDIR)
-\tif conf.env.DEST_OS == 'nswitch':
+\tconf.define_cond('XASH_ALL_SERVERS', conf.options.ALL_SERVERS)
+
+\t# check if we can use C99 stdint
+\tconf.define('STDINT_H', 'stdint.h')
+\t# check if we can use alloca.h or malloc.h
+\tif conf.check_cc(header_name='alloca.h', mandatory=False):
 \t\tpass
+
+\tif conf.env.DEST_OS == 'nswitch':
+\t\tconf.check_cfg(package='solder', args='--cflags --libs', uselib_store='SOLDER')
+\t\tconf.check_cc(lib='m')
 \telif conf.env.DEST_OS == 'psvita':
-\t\t# PSVita don't have large file support at all
+\t\tconf.check_cc(lib='vrtld')
+\t\tconf.check_cc(lib='m')
+\telif conf.env.DEST_OS == 'android':
+\t\tconf.check_cc(lib='dl')
+\t\tconf.check_cc(lib='log')
+\telif conf.env.DEST_OS == 'win32':
 \t\tpass
 \telse:
-\t\t# try to guess how to support large files
+\t\tconf.check_cc(lib='dl', mandatory = False)
+\t\tconf.check_cc(lib='m')
+
+\t# set _FILE_OFFSET_BITS=64 for filesystems with 64-bit inodes
+\tif conf.env.DEST_OS != 'win32' and conf.env.DEST_SIZEOF_VOID_P == 4:
 \t\tpass
 """, encoding="utf-8")
 
@@ -100,7 +119,11 @@ static inline void Platform_Shutdown( void )
     ], check=True)
 
     assert "--n64" in (x / "wscript").read_text()
-    assert "DEST_OS = 'n64'" in (x / "wscript").read_text()
+    root_text = (x / "wscript").read_text()
+    assert "DEST_OS = 'n64'" in root_text
+    assert "if conf.env.DEST_OS == 'n64':" in root_text
+    assert "elif conf.env.DEST_OS == 'nswitch':\n\t\tconf.check_cfg(package='solder'" in root_text
+    assert "if conf.env.DEST_OS != 'win32' and conf.env.DEST_SIZEOF_VOID_P == 4:" in root_text
     engine_text = (x / "engine/wscript").read_text()
     assert "['win32', 'android', 'n64']" in engine_text
     assert "['win32', 'dos', 'n64']" in engine_text
@@ -111,4 +134,4 @@ static inline void Platform_Shutdown( void )
     assert "#define XASH_PLATFORM PLATFORM_N64" in enum_text
     assert (x / "engine/platform/n64/sys_n64.c").is_file()
 
-print("test-r10-integration: PASS")
+print("test-r11-integration: PASS")

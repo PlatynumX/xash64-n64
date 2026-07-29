@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the consolidated r10 Nintendo 64 source changes to pristine Xash3D FWGS.
+"""Apply the consolidated r11 Nintendo 64 source changes to pristine Xash3D FWGS.
 
 One source integration pass only. No generated-patch chain, no sed/regex mutation,
 and no edits to Xash's generated/minified xcompile.py. Each source edit is guarded
@@ -82,25 +82,24 @@ def patch_root_wscript(root: Path) -> None:
         "disable rpath on N64",
     )
 
+    # Current upstream performs platform library probes later in configure(),
+    # after the generic stdint/alloca checks. Match the unique solder probe,
+    # not an assumed adjacency to XASH_GAMEDIR (the r10 failure).
     replace_once(
         p,
-        "\tconf.env.GAMEDIR = conf.options.GAMEDIR\n\tconf.define('XASH_GAMEDIR', conf.options.GAMEDIR)\n\tif conf.env.DEST_OS == 'nswitch':\n",
-        "\tconf.env.GAMEDIR = conf.options.GAMEDIR\n\tconf.define('XASH_GAMEDIR', conf.options.GAMEDIR)\n"
+        "\tif conf.env.DEST_OS == 'nswitch':\n"
+        "\t\tconf.check_cfg(package='solder', args='--cflags --libs', uselib_store='SOLDER')\n",
         "\tif conf.env.DEST_OS == 'n64':\n"
-        "\t\t# libdragon/newlib and the final link line are provided by the N64 target.\n"
+        "\t\t# libdragon/newlib and the final link line are supplied by the N64 target.\n"
         "\t\tpass\n"
-        "\telif conf.env.DEST_OS == 'nswitch':\n",
-        "skip host library probes",
+        "\telif conf.env.DEST_OS == 'nswitch':\n"
+        "\t\tconf.check_cfg(package='solder', args='--cflags --libs', uselib_store='SOLDER')\n",
+        "skip host dl/platform library probes",
     )
 
-    replace_once(
-        p,
-        "\telif conf.env.DEST_OS == 'psvita':\n\t\t# PSVita don't have large file support at all\n\t\tpass\n\telse:\n\t\t# try to guess how to support large files\n",
-        "\telif conf.env.DEST_OS in ['psvita', 'n64']:\n"
-        "\t\t# Do not run a host-style large-file ABI probe for console libc targets.\n"
-        "\t\tpass\n\telse:\n\t\t# try to guess how to support large files\n",
-        "skip host large-file probe",
-    )
+    # Do not pre-emptively alter Xash's large-file feature probe. r10 never
+    # reached configure, so we have no evidence that newlib needs an exception.
+    # Let the real N64 compiler tell us at the next frontier.
 
 
 def patch_engine_wscript(root: Path) -> None:
@@ -229,7 +228,7 @@ def verify(root: Path) -> None:
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"verification failed: {needle!r} missing from {path}")
-    print("r10 N64 source integration verification: PASS")
+    print("r11 N64 source integration verification: PASS")
 
 
 def main() -> int:
