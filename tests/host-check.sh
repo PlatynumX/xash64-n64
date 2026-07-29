@@ -6,14 +6,14 @@ python3 -m py_compile \
     "$ROOT/scripts/audit-xash-upstream.py" \
     "$ROOT/scripts/apply-n64-port.py" \
     "$ROOT/scripts/prepare-uplink.py" \
-    "$ROOT/tests/test-r9-integration.py" \
+    "$ROOT/tests/test-r10-integration.py" \
     "$ROOT/tests/test-prepare-uplink.py"
 
 for script in "$ROOT"/scripts/*.sh "$ROOT"/tests/*.sh; do
     bash -n "$script"
 done
 
-python3 "$ROOT/tests/test-r9-integration.py"
+python3 "$ROOT/tests/test-r10-integration.py"
 python3 "$ROOT/tests/test-prepare-uplink.py"
 
 gcc -std=gnu17 -Wall -Wextra -Werror -fsyntax-only \
@@ -21,11 +21,26 @@ gcc -std=gnu17 -Wall -Wextra -Werror -fsyntax-only \
     -I"$ROOT/tests/mock_libdragon" \
     "$ROOT/xash-overlay/engine/platform/n64/sys_n64.c"
 
+
+# r9 regression: enum values are discovered from pristine library_suffix source,
+# never assumed from an old snapshot.
+if grep -q '#define PLATFORM_PSP 18' "$ROOT/scripts/audit-xash-upstream.py" "$ROOT/scripts/apply-n64-port.py"; then
+    echo "ERROR: stale hard-coded PLATFORM_PSP value remains" >&2
+    exit 1
+fi
+if grep -q '#define ARCHITECTURE_MIPS 4' "$ROOT/scripts/audit-xash-upstream.py"; then
+    echo "ERROR: stale hard-coded ARCHITECTURE_MIPS value remains" >&2
+    exit 1
+fi
+grep -q 'max(value for _, value in platform_defs) + 1' "$ROOT/scripts/apply-n64-port.py"
+grep -q 'ecda80fb9a29d45099a624344456eb3c7d01473d' "$ROOT/.github/workflows/build-r10.yml"
+grep -q '35f85a0797324a5ed0c723203e33ab3c1da94fdd' "$ROOT/.github/workflows/build-r10.yml"
+
 # Regression guards for the real current-Xash static-link route.
-grep -q -- '--enable-static-binary' "$ROOT/scripts/build-xash-r9.sh"
-grep -q -- '--static-linking=filesystem_stdio' "$ROOT/scripts/build-xash-r9.sh"
-grep -q 'mips64-elf-' "$ROOT/scripts/build-xash-r9.sh"
-grep -q 'TOOLWRAP' "$ROOT/scripts/build-xash-r9.sh"
+grep -q -- '--enable-static-binary' "$ROOT/scripts/build-xash-r10.sh"
+grep -q -- '--static-linking=filesystem_stdio' "$ROOT/scripts/build-xash-r10.sh"
+grep -q 'mips64-elf-' "$ROOT/scripts/build-xash-r10.sh"
+grep -q 'TOOLWRAP' "$ROOT/scripts/build-xash-r10.sh"
 grep -q '3rdparty/library_suffix' "$ROOT/scripts/apply-n64-port.py"
 STALE_PATH='3rdparty/library''-suffix'
 if grep -R -n "$STALE_PATH" "$ROOT/scripts" "$ROOT/tests" "$ROOT/.github"; then

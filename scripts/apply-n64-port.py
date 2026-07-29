@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the consolidated r9 Nintendo 64 source changes to pristine Xash3D FWGS.
+"""Apply the consolidated r10 Nintendo 64 source changes to pristine Xash3D FWGS.
 
 One source integration pass only. No generated-patch chain, no sed/regex mutation,
 and no edits to Xash's generated/minified xcompile.py. Each source edit is guarded
@@ -8,6 +8,7 @@ by a unique audited block from current upstream and aborts on drift.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 from pathlib import Path
 
@@ -165,7 +166,33 @@ def patch_library_suffix(root: Path) -> None:
         "#else // POSIX compatible\n",
         "make N64 a first-class non-POSIX platform",
     )
-    replace_once(enums_h, "#define PLATFORM_PSP 18\n", "#define PLATFORM_PSP 18\n#define PLATFORM_N64 19\n", "add N64 platform enum")
+    # Do not hard-code library-suffix's numeric enum table. r9 proved that
+    # numeric values can drift independently of the source structure. Parse the
+    # pristine table, allocate the next free platform ID, then insert N64 before
+    # the XASH_PLATFORM dispatch block.
+    enum_text = enums_h.read_text(encoding="utf-8")
+    if re.search(r"(?m)^\s*#\s*define\s+PLATFORM_N64\b", enum_text):
+        raise SystemExit("library_suffix already defines PLATFORM_N64; re-audit instead of overwriting it")
+    platform_defs = [
+        (m.group(1), int(m.group(2)))
+        for m in re.finditer(r"(?m)^\s*#\s*define\s+(PLATFORM_[A-Z0-9_]+)\s+([0-9]+)\s*(?://.*)?$", enum_text)
+    ]
+    if not platform_defs:
+        raise SystemExit(f"{enums_h}: no numeric PLATFORM_* defines found")
+    if not any(name == "PLATFORM_PSP" for name, _ in platform_defs):
+        raise SystemExit(f"{enums_h}: PLATFORM_PSP anchor missing")
+    n64_platform_id = max(value for _, value in platform_defs) + 1
+    dispatch_anchor = "#if XASH_WIN32\n"
+    if enum_text.count(dispatch_anchor) != 1:
+        raise SystemExit(f"{enums_h}: expected exactly one XASH platform dispatch anchor")
+    enum_text = enum_text.replace(
+        dispatch_anchor,
+        f"#define PLATFORM_N64 {n64_platform_id}\n\n{dispatch_anchor}",
+        1,
+    )
+    enums_h.write_text(enum_text, encoding="utf-8")
+    print(f"patched {enums_h}: add N64 platform enum as {n64_platform_id}")
+
     replace_once(
         enums_h,
         "#elif XASH_PSP\n #define XASH_PLATFORM PLATFORM_PSP\n#else\n",
@@ -194,7 +221,7 @@ def verify(root: Path) -> None:
         root / "engine/wscript": ["'android', 'n64'", "'win32', 'dos', 'n64'", "DEST_OS == 'n64'"],
         root / "engine/platform/platform.h": ["N64_Init", "N64_Shutdown"],
         root / "3rdparty/library_suffix/include/build.h": ["XASH_N64", "defined N64 || defined __N64__"],
-        root / "3rdparty/library_suffix/include/buildenums.h": ["PLATFORM_N64 19"],
+        root / "3rdparty/library_suffix/include/buildenums.h": ["PLATFORM_N64", "XASH_PLATFORM PLATFORM_N64"],
         root / "engine/platform/n64/sys_n64.c": ["debug_init_sdfs", "sd:/xash"],
     }
     for path, needles in checks.items():
@@ -202,7 +229,7 @@ def verify(root: Path) -> None:
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"verification failed: {needle!r} missing from {path}")
-    print("r9 N64 source integration verification: PASS")
+    print("r10 N64 source integration verification: PASS")
 
 
 def main() -> int:

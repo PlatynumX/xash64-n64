@@ -1,4 +1,4 @@
-name: Build xash64-n64 r9 engine bring-up
+name: Build xash64-n64 r10 engine bring-up
 
 on:
   push:
@@ -8,6 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      XASH_SHA: ecda80fb9a29d45099a624344456eb3c7d01473d
+      HLSDK_SHA: 8c5b2846c2448e2b063f358f041d565dc0f076b1
+      LIBDRAGON_SHA: 35f85a0797324a5ed0c723203e33ab3c1da94fdd
     steps:
       - name: Checkout port package
         uses: actions/checkout@v6
@@ -19,9 +23,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p upstream out
-          git clone --depth 1 --recursive --shallow-submodules https://github.com/FWGS/xash3d-fwgs.git upstream/xash3d-fwgs
-          git clone --depth 1 --recursive --shallow-submodules https://github.com/FWGS/hlsdk-portable.git upstream/hlsdk-portable
-          git clone --depth 1 --branch trunk https://github.com/DragonMinded/libdragon.git upstream/libdragon
+          git clone --filter=blob:none --no-checkout https://github.com/FWGS/xash3d-fwgs.git upstream/xash3d-fwgs
+          git -C upstream/xash3d-fwgs fetch --depth 1 origin "$XASH_SHA"
+          git -C upstream/xash3d-fwgs checkout --detach "$XASH_SHA"
+          git -C upstream/xash3d-fwgs submodule update --init --recursive --depth 1
+
+          git clone --filter=blob:none --no-checkout https://github.com/FWGS/hlsdk-portable.git upstream/hlsdk-portable
+          git -C upstream/hlsdk-portable fetch --depth 1 origin "$HLSDK_SHA"
+          git -C upstream/hlsdk-portable checkout --detach "$HLSDK_SHA"
+          git -C upstream/hlsdk-portable submodule update --init --recursive --depth 1
+
+          git clone --filter=blob:none --no-checkout https://github.com/DragonMinded/libdragon.git upstream/libdragon
+          git -C upstream/libdragon fetch --depth 1 origin "$LIBDRAGON_SHA"
+          git -C upstream/libdragon checkout --detach "$LIBDRAGON_SHA"
           {
             echo "xash3d-fwgs $(git -C upstream/xash3d-fwgs rev-parse HEAD)"
             echo "hlsdk-portable $(git -C upstream/hlsdk-portable rev-parse HEAD)"
@@ -32,7 +46,7 @@ jobs:
           } | tee out/upstream-revisions.txt
           python3 scripts/audit-xash-upstream.py upstream/xash3d-fwgs | tee out/upstream-audit.txt
 
-      - name: Build current libdragon and cross-compile real Xash core
+      - name: Build pinned libdragon and cross-compile real Xash core
         id: xashbuild
         shell: bash
         run: |
@@ -49,7 +63,7 @@ jobs:
               make -C upstream/libdragon -j2 clobber
               make -C upstream/libdragon -j2 libdragon tools
               make -C upstream/libdragon -j2 install tools-install
-              "$PWD/scripts/build-xash-r9.sh" "$PWD/upstream/xash3d-fwgs" "$PWD/out"
+              "$PWD/scripts/build-xash-r10.sh" "$PWD/upstream/xash3d-fwgs" "$PWD/out"
             '
 
       - name: Capture source diff and toolchain provenance
@@ -57,15 +71,15 @@ jobs:
         run: |
           set +e
           mkdir -p out
-          git -C upstream/xash3d-fwgs diff -- . ':(exclude)3rdparty/library_suffix' > out/xash-r9-source.diff
-          git -C upstream/xash3d-fwgs/3rdparty/library_suffix diff > out/library-suffix-r9-source.diff
+          git -C upstream/xash3d-fwgs diff -- . ':(exclude)3rdparty/library_suffix' > out/xash-r10-source.diff
+          git -C upstream/xash3d-fwgs/3rdparty/library_suffix diff > out/library-suffix-r10-source.diff
           docker run --rm ghcr.io/dragonminded/libdragon:latest bash -lc '/n64_toolchain/bin/mips64-elf-gcc --version | head -n 1' > out/toolchain-version.txt 2>&1
-          if test -f out/xash64-n64-r9.z64; then sha256sum out/xash64-n64-r9.z64 | tee out/rom-sha256.txt; fi
+          if test -f out/xash64-n64-r10.z64; then sha256sum out/xash64-n64-r10.z64 | tee out/rom-sha256.txt; fi
 
-      - name: Upload r9 ROM or first-frontier diagnostics
+      - name: Upload r10 ROM or first-frontier diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: xash64-n64-r9
+          name: xash64-n64-r10
           path: out/
           if-no-files-found: error

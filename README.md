@@ -1,12 +1,15 @@
-# xash64-n64 r9 — real Xash3D engine bring-up
+# xash64-n64 r10 — real Xash3D engine bring-up
 
-r9 is the point where the project stops being an N64 data-path probe and starts
-cross-compiling **current Xash3D FWGS itself** for Nintendo 64/libdragon.
+r10 continues the first real Xash3D Nintendo 64 cross-build. r9 never reached
+source integration: its upstream audit stopped on two stale, hard-coded numeric
+assumptions in `library_suffix/buildenums.h`. r10 removes those brittle numeric
+assumptions and reproduces the exact upstream revisions reported by the r9 CI
+artifact before advancing to the real configure/compiler frontier.
 
-The Uplink asset-prep path from r8 is preserved, but r9's main job is now the
+The Uplink asset-prep path from r8 is preserved, but r10's main job is now the
 engine build.
 
-## r9 target
+## r10 target
 
 ```text
 libdragon boot
@@ -30,16 +33,30 @@ adds `engine/platform/posix` for almost every non-Windows/non-DOS target and run
 a pthread probe for almost every non-Windows/non-Android target. N64 is therefore
 made an explicit exception rather than pretending to be Linux.
 
-r9 also does **not** patch `scripts/waifulib/xcompile.py`. The N64 build instead
+r10 also does **not** patch `scripts/waifulib/xcompile.py`. The N64 build instead
 supplies libdragon's `mips64-elf-gcc/g++` explicitly and sets the Waf target to
 `n64` in the normal root `wscript`. Current Xash's static-link helper separately
-looks up programs literally named `ld` and `objcopy`; r9 puts temporary wrappers
+looks up programs literally named `ld` and `objcopy`; r10 puts temporary wrappers
 for libdragon's `mips64-elf-ld` and `mips64-elf-objcopy` first in `PATH` so Waf
 cannot accidentally use the host binutils.
 
 The integration is one consolidated source pass with audited unique blocks. It
-aborts on upstream drift and never stacks r9 on top of an already-mutated tree.
+aborts on upstream drift and never stacks r10 on top of an already-mutated tree.
 CI saves the resulting source diff for inspection.
+
+
+## r9 failure addressed in r10
+
+r9's artifact showed that every structural Xash assumption passed, but the audit
+expected literal historic lines for `PLATFORM_PSP` and `ARCHITECTURE_MIPS`. Those
+integer values are not part of the N64 port contract and should never have been
+hard-coded into the audit.
+
+r10 now parses numeric `PLATFORM_*` definitions from the pristine checked-out
+`library_suffix` source, verifies the PSP/MIPS anchors semantically, and allocates
+`PLATFORM_N64` as the next unused platform ID. The integration test deliberately
+uses shifted fake enum numbers and a higher fake platform ID to prove this path
+does not depend on PSP being 18 or MIPS being 4.
 
 ## N64 runtime backend
 
@@ -70,12 +87,12 @@ Your r8 run already verified the three Uplink maps inside that PAK as BSP v30.
 Upload this package as the root of a GitHub repository and run:
 
 ```text
-Actions -> Build xash64-n64 r9 engine bring-up -> Run workflow
+Actions -> Build xash64-n64 r10 engine bring-up -> Run workflow
 ```
 
-CI clones Xash3D FWGS recursively (including `3rdparty/library_suffix`), records
-the exact Xash/HLSDK/libdragon SHAs, builds current libdragon, audits the exact
-source assumptions, applies the guarded N64 source integration, then runs:
+CI checks out the exact Xash/HLSDK/libdragon revisions recorded by the r9
+artifact (including Xash's exact `3rdparty/library_suffix` submodule revision),
+audits the source structure, applies the guarded N64 source integration, then runs:
 
 ```sh
 ./waf configure -T debug \
@@ -94,7 +111,7 @@ source assumptions, applies the guarded N64 source integration, then runs:
 The artifact is always named:
 
 ```text
-xash64-n64-r9
+xash64-n64-r10
 ```
 
 Even a failed cross-build uploads `out/`, including:
@@ -103,10 +120,10 @@ Even a failed cross-build uploads `out/`, including:
 upstream-revisions.txt
 upstream-audit.txt
 source-integration.log
-xash-r9-configure.log
-xash-r9-build.log
-xash-r9-source.diff
-library-suffix-r9-source.diff
+xash-r10-configure.log
+xash-r10-build.log
+xash-r10-source.diff
+library-suffix-r10-source.diff
 toolchain-version.txt
 tool-selection.txt
 ```
@@ -114,8 +131,8 @@ tool-selection.txt
 If the engine links successfully it additionally contains:
 
 ```text
-xash64-n64-r9.elf
-xash64-n64-r9.z64
+xash64-n64-r10.elf
+xash64-n64-r10.z64
 rom-sha256.txt
 rom-packaging.log
 ```
@@ -147,7 +164,7 @@ It checks:
 
 - Python compilation;
 - Bash syntax;
-- the consolidated r9 source-integration regression fixture;
+- the consolidated r10 source-integration regression fixture;
 - the existing synthetic Uplink installer/PAK tests;
 - `sys_n64.c` with GCC `-Wall -Wextra -Werror` against mocked APIs;
 - `git diff --cached --check` over the complete package.
@@ -157,7 +174,7 @@ environment because the N64 cross-toolchain is not installed here. GitHub Action
 is therefore the first real cross-compile gate, and its logs are deliberately
 preserved whether it succeeds or fails.
 
-## After r9
+## After r10
 
 Once the headless core links and boots, the order is:
 

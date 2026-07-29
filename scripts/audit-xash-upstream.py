@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Guarded source audit for the Xash3D FWGS N64 bring-up.
 
-This script DOES NOT modify upstream. It verifies the exact current-upstream
-assumptions that r9 changes or relies on. Failing loudly on drift is intentional.
+r10 deliberately audits *structure*, not historical enum numbers. r9 stopped
+before source integration because library-suffix changed numeric enum values
+while preserving the API/layout we actually depend on.
 """
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 import sys
 
 CHECKS = {
@@ -38,9 +40,10 @@ CHECKS = {
         "#elif defined __mips__",
     ],
     "library suffix enums": [
-        "#define PLATFORM_PSP 18",
         "#elif XASH_PSP",
-        "#define ARCHITECTURE_MIPS 4",
+        "#define XASH_PLATFORM PLATFORM_PSP",
+        "#elif XASH_MIPS",
+        "#define XASH_ARCHITECTURE ARCHITECTURE_MIPS",
     ],
     "xshlib static helper": [
         "--static-linking",
@@ -64,6 +67,16 @@ def require_text(path: Path, needles: list[str], label: str) -> list[str]:
     return out
 
 
+def numeric_define(path: Path, name: str) -> tuple[bool, str]:
+    if not path.is_file():
+        return False, f"FAIL enum audit: missing {path}"
+    text = path.read_text(encoding="utf-8", errors="replace")
+    m = re.search(rf"(?m)^\s*#\s*define\s+{re.escape(name)}\s+([0-9]+)\s*(?://.*)?$", text)
+    if not m:
+        return False, f"FAIL enum audit: numeric {name} define not found"
+    return True, f"PASS enum audit: {name}={m.group(1)} (value is discovered, not hard-coded)"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("xash_root", type=Path)
@@ -82,6 +95,14 @@ def main() -> int:
     messages: list[str] = []
     for label, needles in CHECKS.items():
         messages.extend(require_text(paths[label], needles, label))
+
+    for name in ("PLATFORM_PSP", "ARCHITECTURE_MIPS"):
+        ok, msg = numeric_define(paths["library suffix enums"], name)
+        messages.append(msg)
+
+    enums_text = paths["library suffix enums"].read_text(encoding="utf-8", errors="replace") if paths["library suffix enums"].is_file() else ""
+    if re.search(r"(?m)^\s*#\s*define\s+PLATFORM_N64\b", enums_text):
+        messages.append("NOTICE upstream already defines PLATFORM_N64; re-audit before applying our overlay")
 
     n64_dir = root / "engine" / "platform" / "n64"
     if n64_dir.exists():

@@ -5,7 +5,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-with tempfile.TemporaryDirectory(prefix="xash64-r9-test-") as td:
+with tempfile.TemporaryDirectory(prefix="xash64-r10-test-") as td:
     x = Path(td) / "xash"
     (x / "engine/platform").mkdir(parents=True)
     (x / "3rdparty/library_suffix/include").mkdir(parents=True)
@@ -79,11 +79,18 @@ static inline void Platform_Shutdown( void )
 #endif
 """, encoding="utf-8")
     (x / "3rdparty/library_suffix/include/buildenums.h").write_text("""\
-#define PLATFORM_PSP 18
+#define PLATFORM_PSP 20
+#define PLATFORM_FUTURE_TEST 23
+#if XASH_WIN32
+ #define XASH_PLATFORM PLATFORM_WIN32
 #elif XASH_PSP
  #define XASH_PLATFORM PLATFORM_PSP
 #else
  #error
+#endif
+#define ARCHITECTURE_MIPS 42
+#if XASH_MIPS
+ #define XASH_ARCHITECTURE ARCHITECTURE_MIPS
 #endif
 """, encoding="utf-8")
 
@@ -99,6 +106,9 @@ static inline void Platform_Shutdown( void )
     assert "['win32', 'dos', 'n64']" in engine_text
     assert "DEST_OS == 'n64'" in engine_text
     assert "XASH_N64" in (x / "3rdparty/library_suffix/include/build.h").read_text()
+    enum_text = (x / "3rdparty/library_suffix/include/buildenums.h").read_text()
+    assert "#define PLATFORM_N64 24" in enum_text
+    assert "#define XASH_PLATFORM PLATFORM_N64" in enum_text
     assert (x / "engine/platform/n64/sys_n64.c").is_file()
 
-print("test-r9-integration: PASS")
+print("test-r10-integration: PASS")
