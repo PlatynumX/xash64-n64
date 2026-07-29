@@ -1,0 +1,7 @@
+upstream/
+out/
+build/
+__pycache__/
+*.pyc
+*.elf
+*.z64

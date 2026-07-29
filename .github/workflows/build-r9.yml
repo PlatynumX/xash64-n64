@@ -1,0 +1,71 @@
+name: Build xash64-n64 r9 engine bring-up
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout port package
+        uses: actions/checkout@v6
+
+      - name: Host preflight
+        run: ./tests/host-check.sh
+
+      - name: Clone exact upstreams
+        run: |
+          set -euo pipefail
+          mkdir -p upstream out
+          git clone --depth 1 --recursive --shallow-submodules https://github.com/FWGS/xash3d-fwgs.git upstream/xash3d-fwgs
+          git clone --depth 1 --recursive --shallow-submodules https://github.com/FWGS/hlsdk-portable.git upstream/hlsdk-portable
+          git clone --depth 1 --branch trunk https://github.com/DragonMinded/libdragon.git upstream/libdragon
+          {
+            echo "xash3d-fwgs $(git -C upstream/xash3d-fwgs rev-parse HEAD)"
+            echo "hlsdk-portable $(git -C upstream/hlsdk-portable rev-parse HEAD)"
+            echo "libdragon $(git -C upstream/libdragon rev-parse HEAD)"
+            echo
+            echo "Xash submodules:"
+            git -C upstream/xash3d-fwgs submodule status --recursive
+          } | tee out/upstream-revisions.txt
+          python3 scripts/audit-xash-upstream.py upstream/xash3d-fwgs | tee out/upstream-audit.txt
+
+      - name: Build current libdragon and cross-compile real Xash core
+        id: xashbuild
+        shell: bash
+        run: |
+          set -o pipefail
+          docker pull ghcr.io/dragonminded/libdragon:latest
+          docker run --rm \
+            --mount type=bind,source="${GITHUB_WORKSPACE}",target=/work \
+            --workdir=/work \
+            ghcr.io/dragonminded/libdragon:latest \
+            bash -lc '
+              set -euo pipefail
+              export N64_INST=/n64_toolchain
+              make -C upstream/libdragon -j2 install-mk
+              make -C upstream/libdragon -j2 clobber
+              make -C upstream/libdragon -j2 libdragon tools
+              make -C upstream/libdragon -j2 install tools-install
+              "$PWD/scripts/build-xash-r9.sh" "$PWD/upstream/xash3d-fwgs" "$PWD/out"
+            '
+
+      - name: Capture source diff and toolchain provenance
+        if: always()
+        run: |
+          set +e
+          mkdir -p out
+          git -C upstream/xash3d-fwgs diff -- . ':(exclude)3rdparty/library_suffix' > out/xash-r9-source.diff
+          git -C upstream/xash3d-fwgs/3rdparty/library_suffix diff > out/library-suffix-r9-source.diff
+          docker run --rm ghcr.io/dragonminded/libdragon:latest bash -lc '/n64_toolchain/bin/mips64-elf-gcc --version | head -n 1' > out/toolchain-version.txt 2>&1
+          if test -f out/xash64-n64-r9.z64; then sha256sum out/xash64-n64-r9.z64 | tee out/rom-sha256.txt; fi
+
+      - name: Upload r9 ROM or first-frontier diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xash64-n64-r9
+          path: out/
+          if-no-files-found: error
