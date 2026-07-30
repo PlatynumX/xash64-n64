@@ -1,4 +1,4 @@
-name: Build xash64-n64 r13 engine bring-up
+name: Build xash64-n64 r14 engine bring-up
 
 on:
   push:
@@ -69,7 +69,7 @@ jobs:
               make -C upstream/libdragon -j2 clobber
               make -C upstream/libdragon -j2 libdragon tools
               make -C upstream/libdragon -j2 install tools-install
-              "$PWD/scripts/build-xash-r13.sh" "$PWD/upstream/xash3d-fwgs" "$PWD/out"
+              "$PWD/scripts/build-xash-r14.sh" "$PWD/upstream/xash3d-fwgs" "$PWD/out"
             '
 
       - name: Capture source diff and toolchain provenance
@@ -77,23 +77,23 @@ jobs:
         run: |
           set +e
           mkdir -p out
-          git -C upstream/xash3d-fwgs diff -- . ':(exclude)3rdparty/library_suffix' > out/xash-r13-source.diff
-          git -C upstream/xash3d-fwgs/3rdparty/library_suffix diff > out/library-suffix-r13-source.diff
+          git -C upstream/xash3d-fwgs diff -- . ':(exclude)3rdparty/library_suffix' > out/xash-r14-source.diff
+          git -C upstream/xash3d-fwgs/3rdparty/library_suffix diff > out/library-suffix-r14-source.diff
           # Defensive host-side copies: even if the container exits before the
           # build driver can preserve Waf diagnostics, the bind-mounted checkout
           # still contains them.
           if test -f upstream/xash3d-fwgs/build/config.log; then
-            cp upstream/xash3d-fwgs/build/config.log out/xash-r13-waf-config.log
+            cp upstream/xash3d-fwgs/build/config.log out/xash-r14-waf-config.log
           fi
-          if test -f upstream/xash3d-fwgs/wscript; then cp upstream/xash3d-fwgs/wscript out/xash-r13-patched-wscript.txt; fi
-          if test -f upstream/xash3d-fwgs/engine/wscript; then cp upstream/xash3d-fwgs/engine/wscript out/xash-r13-patched-engine-wscript.txt; fi
+          if test -f upstream/xash3d-fwgs/wscript; then cp upstream/xash3d-fwgs/wscript out/xash-r14-patched-wscript.txt; fi
+          if test -f upstream/xash3d-fwgs/engine/wscript; then cp upstream/xash3d-fwgs/engine/wscript out/xash-r14-patched-engine-wscript.txt; fi
           docker run --rm ghcr.io/dragonminded/libdragon:latest bash -lc '/n64_toolchain/bin/mips64-elf-gcc --version | head -n 1' > out/toolchain-version.txt 2>&1
-          if test -f out/xash64-n64-r13.z64; then sha256sum out/xash64-n64-r13.z64 | tee out/rom-sha256.txt; fi
+          if test -f out/xash64-n64-r14.z64; then sha256sum out/xash64-n64-r14.z64 | tee out/rom-sha256.txt; fi
 
-      - name: Upload r13 ROM or first-frontier diagnostics
+      - name: Upload r14 ROM or first-frontier diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: xash64-n64-r13
+          name: xash64-n64-r14
           path: out/
           if-no-files-found: error

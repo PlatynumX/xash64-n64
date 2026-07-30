@@ -1,9 +1,9 @@
-# Current Xash upstream audit for r13
+# Current Xash upstream audit for r14
 
-r13 intentionally changes only the architecture assumptions needed to create a real
+r14 intentionally changes only the architecture assumptions needed to create a real
 Nintendo 64 target. The package audits current upstream before applying any edit.
 
-Verified assumptions used by r13:
+Verified assumptions used by r14:
 
 - root Waf has no N64 target option and always includes `filesystem`;
 - the actual submodule path is `3rdparty/library_suffix` (underscore);
@@ -15,8 +15,8 @@ Verified assumptions used by r13:
 - the engine's generic library branch adds POSIX libraries such as pthread/socket/dl;
 - `platform.h` has explicit Switch/Vita/DOS/Windows/Linux dispatch, but no N64 dispatch;
 - library_suffix already recognizes MIPS CPU architecture but has no Nintendo 64 OS identifier;
-- Xash already has a low-memory mode, which r13 enables for the 8 MiB bring-up.
+- Xash already has a low-memory mode, which r14 enables for the 8 MiB bring-up.
 
 The CI audit runs against a freshly cloned recursive upstream before the source
 integration step. If any audited block drifts, or upstream grows its own
-`engine/platform/n64`, r13 stops instead of silently mutating unfamiliar source.
+`engine/platform/n64`, r14 stops instead of silently mutating unfamiliar source.

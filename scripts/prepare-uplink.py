@@ -422,7 +422,7 @@ def bootstrap_rewise(cache_root: Path) -> Path:
     log = rewise_log_path(cache_root)
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(
-        f"Xash64 r13 REWise bootstrap\nrelease={REWISE_GIT_TAG}\nsource={REWISE_GIT_URL}\n",
+        f"Xash64 r14 REWise bootstrap\nrelease={REWISE_GIT_TAG}\nsource={REWISE_GIT_URL}\n",
         encoding="utf-8",
     )
     ensure_rewise_build_tools(cache_root)
@@ -949,7 +949,7 @@ def write_manifest(game_root: Path, manifest: Path) -> None:
 
 def write_extraction_inventory(root: Path, cache_root: Path) -> Path:
     inventory = cache_root / "uplink-extracted-inventory.txt"
-    rows = ["# Xash64 r13 extracted Uplink inventory"]
+    rows = ["# Xash64 r14 extracted Uplink inventory"]
     files = sorted((p for p in root.rglob("*") if p.is_file()), key=lambda p: str(p).lower())
     for path in files[:2000]:
         try:

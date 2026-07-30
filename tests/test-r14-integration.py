@@ -5,7 +5,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-with tempfile.TemporaryDirectory(prefix="xash64-r13-test-") as td:
+with tempfile.TemporaryDirectory(prefix="xash64-r14-test-") as td:
     x = Path(td) / "xash"
     (x / "engine/platform").mkdir(parents=True)
     (x / "3rdparty/library_suffix/include").mkdir(parents=True)
@@ -126,6 +126,7 @@ static inline void Platform_Shutdown( void )
     root_text = (x / "wscript").read_text()
     assert "DEST_OS = 'n64'" in root_text
     assert "Effective N64 target override" in root_text
+    assert "conf.env.append_unique('LDFLAGS', ['-lc', '-ldragon', '-lm', '-ldragonsys'])" in root_text
     assert "if conf.env.DEST_OS == 'n64':" in root_text
     assert "elif conf.env.DEST_OS == 'nswitch':\n\t\tconf.check_cfg(package='solder'" in root_text
     assert "if conf.env.DEST_OS != 'win32' and conf.env.DEST_SIZEOF_VOID_P == 4:" in root_text
@@ -143,4 +144,4 @@ static inline void Platform_Shutdown( void )
     assert "#elif XASH_FUTURE_TEST\n #define XASH_PLATFORM PLATFORM_FUTURE_TEST" in enum_text
     assert (x / "engine/platform/n64/sys_n64.c").is_file()
 
-print("test-r13-integration: PASS")
+print("test-r14-integration: PASS")
