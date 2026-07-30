@@ -6,14 +6,14 @@ python3 -m py_compile \
     "$ROOT/scripts/audit-xash-upstream.py" \
     "$ROOT/scripts/apply-n64-port.py" \
     "$ROOT/scripts/prepare-uplink.py" \
-    "$ROOT/tests/test-r12-integration.py" \
+    "$ROOT/tests/test-r13-integration.py" \
     "$ROOT/tests/test-prepare-uplink.py"
 
 for script in "$ROOT"/scripts/*.sh "$ROOT"/tests/*.sh; do
     bash -n "$script"
 done
 
-python3 "$ROOT/tests/test-r12-integration.py"
+python3 "$ROOT/tests/test-r13-integration.py"
 python3 "$ROOT/tests/test-prepare-uplink.py"
 
 gcc -std=gnu17 -Wall -Wextra -Werror -fsyntax-only \
@@ -33,17 +33,20 @@ if grep -q '#define ARCHITECTURE_MIPS 4' "$ROOT/scripts/audit-xash-upstream.py";
     exit 1
 fi
 grep -q 'max(value for _, _, value in platform_defs) + 1' "$ROOT/scripts/apply-n64-port.py"
-grep -q 'ecda80fb9a29d45099a624344456eb3c7d01473d' "$ROOT/.github/workflows/build-r12.yml"
-grep -q '35f85a0797324a5ed0c723203e33ab3c1da94fdd' "$ROOT/.github/workflows/build-r12.yml"
+grep -q 'ecda80fb9a29d45099a624344456eb3c7d01473d' "$ROOT/.github/workflows/build-r13.yml"
+grep -q '35f85a0797324a5ed0c723203e33ab3c1da94fdd' "$ROOT/.github/workflows/build-r13.yml"
 
 # Regression guards for the real current-Xash static-link route.
-grep -q -- '--enable-static-binary' "$ROOT/scripts/build-xash-r12.sh"
-grep -q -- '--static-linking=filesystem_stdio' "$ROOT/scripts/build-xash-r12.sh"
-grep -q 'mips64-elf-' "$ROOT/scripts/build-xash-r12.sh"
-grep -q 'TOOLWRAP' "$ROOT/scripts/build-xash-r12.sh"
+grep -q -- '--enable-static-binary' "$ROOT/scripts/build-xash-r13.sh"
+grep -q -- '--static-linking=filesystem_stdio' "$ROOT/scripts/build-xash-r13.sh"
+grep -q 'mips64-elf-' "$ROOT/scripts/build-xash-r13.sh"
+grep -q 'TOOLWRAP' "$ROOT/scripts/build-xash-r13.sh"
+grep -q 'xash-r13-waf-config.log' "$ROOT/scripts/build-xash-r13.sh"
+grep -q "build/config.log" "$ROOT/scripts/build-xash-r13.sh" "$ROOT/.github/workflows/build-r13.yml"
+grep -q 'Effective N64 target override' "$ROOT/scripts/apply-n64-port.py"
 grep -q '3rdparty/library_suffix' "$ROOT/scripts/apply-n64-port.py"
 # r11 regression: do not require the PSP branch to be textually adjacent to
-# the POSIX fallback. The r12 patcher must locate the fallback structurally.
+# the POSIX fallback. The r13 patcher must locate the fallback structurally.
 if grep -q '"#elif defined __psp__\\n #define XASH_PSP 1\\n"' "$ROOT/scripts/apply-n64-port.py"; then
     echo "ERROR: stale r11 PSP/POSIX adjacency patch remains" >&2
     exit 1

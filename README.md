@@ -1,149 +1,74 @@
-# xash64-n64 r12 — real Xash3D engine bring-up
+# xash64-n64 r13 — capture the first real Waf/N64 configure failure
 
-r12 is the point where the project stops being an N64 data-path probe and starts
-cross-compiling **current Xash3D FWGS itself** for Nintendo 64/libdragon.
+r12 finally crossed the source-integration boundary and reached Xash3D FWGS's
+real Waf configure step with libdragon's `mips64-elf-gcc/g++` toolchain.
 
-The Uplink asset-prep path from r8 is preserved, but r12's main job is now the
-engine build.
-
-## r12 target
+The observed r12 frontier was:
 
 ```text
-libdragon boot
-  -> N64 becomes a first-class Xash platform (not Linux/POSIX)
-  -> real Xash engine core starts
-  -> mount SummerCart SD as sd:/
-  -> chdir to sd:/xash
-  -> Xash filesystem sees valve/pak0.PAK
-  -> stop at the first real engine/game-library frontier
+Checking for c flags '-MMD'       : yes
+Checking for cxx flags '-MMD'     : yes
+Checking for program 'strip'      : /n64_toolchain/bin/mips64-elf-strip
+Checking for required C flags     : no
+The configuration failed
+(complete log in .../build/config.log)
 ```
 
-This is deliberately a **headless/dedicated engine-core bring-up** first. It does
-not claim to render Uplink yet and it does not include HLSDK-portable in the ROM
-yet. Getting the unmodified Xash core through the MIPS compiler and into its own
-filesystem startup gives us a clean, useful frontier before renderer/client work.
+r13 deliberately does **not guess at the compiler/linker fix**. Its job is to
+preserve the exact Waf `build/config.log`, the configure test directories when
+available, and the patched Waf source so the next source change is driven by the
+actual command and stderr that failed.
 
-## Why the build integration is structured this way
+## Important note about `Target OS : linux`
 
-Current Xash builds platform sources from `engine/platform/<DEST_OS>` but also
-adds `engine/platform/posix` for almost every non-Windows/non-DOS target and runs
-a pthread probe for almost every non-Windows/non-Android target. N64 is therefore
-made an explicit exception rather than pretending to be Linux.
-
-r12 also does **not** patch `scripts/waifulib/xcompile.py`. The N64 build instead
-supplies libdragon's `mips64-elf-gcc/g++` explicitly and sets the Waf target to
-`n64` in the normal root `wscript`. Current Xash's static-link helper separately
-looks up programs literally named `ld` and `objcopy`; r12 puts temporary wrappers
-for libdragon's `mips64-elf-ld` and `mips64-elf-objcopy` first in `PATH` so Waf
-cannot accidentally use the host binutils.
-
-The integration is one consolidated source pass with audited structural anchors.
-It aborts on upstream drift and never stacks r12 on top of an already-mutated tree.
-r12 specifically fixes the r11 failure in `library_suffix/build.h`: the patch no
-longer assumes the PSP branch is textually adjacent to the POSIX fallback. It
-locates the unique POSIX fallback and inserts N64 immediately before it while
-preserving every existing platform branch verbatim. The enum mapping is handled
-the same way: numeric IDs are discovered from source and the PSP dispatch is
-located structurally rather than by an adjacency-sensitive replacement.
-CI saves both the resulting diff and the pristine `library_suffix` headers used
-for the run.
-
-## N64 runtime backend
-
-`xash-overlay/engine/platform/n64/sys_n64.c` currently implements:
-
-- libdragon timers;
-- SummerCart/SC64 USB logging through stderr;
-- emulator debug logging;
-- flashcart SD mounting at `sd:/`;
-- mandatory 8 MiB Expansion Pak check;
-- `sd:/xash` as Xash's working/base directory;
-- N64 platform init/shutdown;
-- safe stubs for unsupported shell/message/status operations.
-
-Expected SD tree is unchanged from the successful r8 preparation:
+Waf's compiler loader prints its compiler-derived target information while
+`compiler_c` / `compiler_cxx` are loading. Our N64 override happens immediately
+after that loader returns. r13 therefore prints an explicit later line:
 
 ```text
-SD:/
-└── xash/
-    └── valve/
-        └── pak0.PAK
+Effective N64 target override : os=n64 cpu=mips binfmt=elf
 ```
 
-Your r8 run already verified the three Uplink maps inside that PAK as BSP v30.
+That tells us what Xash is actually using after `--n64` handling instead of
+inferring it from the earlier compiler-loader message.
 
-## Build with GitHub Actions
-
-Upload this package as the root of a GitHub repository and run:
+## r13 target
 
 ```text
-Actions -> Build xash64-n64 r12 engine bring-up -> Run workflow
+pinned Xash source
+  -> guarded N64 integration
+  -> libdragon mips64-elf toolchain
+  -> Waf configure
+  -> preserve exact required-C-flags failure
+  -> next revision fixes evidence, not guesses
 ```
 
-CI clones Xash3D FWGS recursively (including `3rdparty/library_suffix`), records
-the exact Xash/HLSDK/libdragon SHAs, builds current libdragon, audits the exact
-source assumptions, applies the guarded N64 source integration, then runs:
-
-```sh
-./waf configure -T debug \
-  --n64 \
-  --dedicated \
-  --enable-static-binary \
-  --static-linking=filesystem_stdio \
-  --enable-bundled-deps \
-  --low-memory-mode=1 \
-  --disable-rpath \
-  --disable-werror
-
-./waf build -j2 -v
-```
-
-The artifact is always named:
+No renderer or HLSDK gameplay code is added in r13. The successful Uplink data
+path from r8 remains unchanged:
 
 ```text
-xash64-n64-r12
+SD:/xash/valve/pak0.PAK
 ```
 
-Even a failed cross-build uploads `out/`, including:
+## Diagnostics always uploaded
+
+The GitHub Actions artifact is `xash64-n64-r13`. In addition to the existing
+source diff/toolchain files, r13 captures:
 
 ```text
-upstream-revisions.txt
-upstream-audit.txt
-source-integration.log
-xash-r12-configure.log
-xash-r12-build.log
-xash-r12-source.diff
-library-suffix-r12-source.diff
-library-suffix-build.pristine.h
-library-suffix-buildenums.pristine.h
-library-suffix-revision.txt
-toolchain-version.txt
-tool-selection.txt
+xash-r13-configure.log
+xash-r13-waf-config.log
+xash-r13-conf-checks.tar.gz       # when Waf leaves .conf_check_* dirs
+xash-r13-patched-wscript.txt
+xash-r13-patched-engine-wscript.txt
 ```
 
-If the engine links successfully it additionally contains:
+`xash-r13-waf-config.log` is copied twice defensively: once inside the libdragon
+container immediately after configure, and again from the bind-mounted checkout
+in the workflow's `if: always()` diagnostics step.
 
-```text
-xash64-n64-r12.elf
-xash64-n64-r12.z64
-rom-sha256.txt
-rom-packaging.log
-```
-
-That means the next revision is driven by the **actual first compiler/linker
-failure**, not a guessed API mismatch.
-
-## Uplink preparation remains available
-
-The verified r8 route is still included:
-
-```sh
-./scripts/prepare-uplink.sh --download "$HOME/xash64-uplink-sd" --force
-```
-
-It downloads/verifies the original demo installer, extracts its Wise payload,
-finds the Uplink game root, verifies `hldemo1/2/3` inside the PAK, and copies the
-**whole game-data tree** to `xash/valve`.
+If configure succeeds, r13 continues to the real engine compile exactly as r12
+did and preserves the first compiler/linker frontier.
 
 ## Host validation
 
@@ -153,27 +78,7 @@ Run:
 ./tests/host-check.sh
 ```
 
-It checks:
-
-- Python compilation;
-- Bash syntax;
-- the consolidated r12 source-integration regression fixture;
-- the existing synthetic Uplink installer/PAK tests;
-- `sys_n64.c` with GCC `-Wall -Wextra -Werror` against mocked APIs;
-- `git diff --cached --check` over the complete package.
-
-The actual MIPS/libdragon/Xash build cannot be performed in this local execution
-environment because the N64 cross-toolchain is not installed here. GitHub Actions
-is therefore the first real cross-compile gate, and its logs are deliberately
-preserved whether it succeeds or fails.
-
-## After r12
-
-Once the headless core links and boots, the order is:
-
-1. prove Xash's own filesystem opens `valve/pak0.PAK` on SummerCart;
-2. cross-compile/link the Uplink-compatible HLSDK server/client code;
-3. add N64 controller input;
-4. bring up a renderer, initially targeting 320x240 and libdragon's N64 graphics stack;
-5. load `hldemo1` and spawn the player;
-6. attack the 8 MiB memory budget from real allocation data.
+It checks Python syntax, all shell syntax, the consolidated source-integration
+fixture, the library_suffix regressions, Uplink/PAK preparation, N64 backend
+`-Wall -Wextra -Werror`, config-log capture guards, exact pinned upstream SHAs,
+and `git diff --cached --check` over the package.

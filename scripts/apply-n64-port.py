@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the consolidated r12 Nintendo 64 source changes to pristine Xash3D FWGS.
+"""Apply the consolidated r13 Nintendo 64 source changes to pristine Xash3D FWGS.
 
 One source integration pass only. No generated-patch chain, no sed/regex mutation,
 and no edits to Xash's generated/minified xcompile.py. Each source edit is guarded
@@ -56,6 +56,9 @@ def patch_root_wscript(root: Path) -> None:
         "\t\tconf.env.DEST_OS = 'n64'\n"
         "\t\tconf.env.DEST_CPU = 'mips'\n"
         "\t\tconf.env.DEST_BINFMT = 'elf'\n"
+        "\t\t# compiler_c prints its auto-detected host-style target before this override.\n"
+        "\t\t# Emit the effective values explicitly so CI shows the target Xash uses.\n"
+        "\t\tconf.msg('Effective N64 target override', 'os=%s cpu=%s binfmt=%s' % (conf.env.DEST_OS, conf.env.DEST_CPU, conf.env.DEST_BINFMT))\n"
         "\t\tconf.env.append_unique('CFLAGS', common + ['-std=gnu17'])\n"
         "\t\tconf.env.append_unique('CXXFLAGS', common + ['-std=gnu++17'])\n"
         "\t\tconf.env.append_unique('LINKFLAGS', ['-mabi=o64', '-g', '-L%s' % n64_lib, '-Wl,-T,n64.ld', '-Wl,--gc-sections', '-Wl,--wrap=__do_global_ctors'])\n"
@@ -263,7 +266,7 @@ def verify(root: Path) -> None:
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"verification failed: {needle!r} missing from {path}")
-    print("r12 N64 source integration verification: PASS")
+    print("r13 N64 source integration verification: PASS")
 
 
 def main() -> int:
