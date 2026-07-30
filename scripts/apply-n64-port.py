@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the consolidated r11 Nintendo 64 source changes to pristine Xash3D FWGS.
+"""Apply the consolidated r12 Nintendo 64 source changes to pristine Xash3D FWGS.
 
 One source integration pass only. No generated-patch chain, no sed/regex mutation,
 and no edits to Xash's generated/minified xcompile.py. Each source edit is guarded
@@ -149,6 +149,20 @@ def patch_platform_header(root: Path) -> None:
     )
 
 
+def _unique_line_index(lines: list[str], stripped: str, label: str) -> int:
+    matches = [i for i, line in enumerate(lines) if line.strip() == stripped]
+    if len(matches) != 1:
+        raise SystemExit(f"{label}: expected exactly 1 structural line {stripped!r}, found {len(matches)}")
+    return matches[0]
+
+
+def _next_nonblank(lines: list[str], start: int) -> int:
+    for i in range(start, len(lines)):
+        if lines[i].strip():
+            return i
+    raise SystemExit("unexpected end of file while finding next nonblank line")
+
+
 def patch_library_suffix(root: Path) -> None:
     d = root / "3rdparty/library_suffix/include"
     build_h = d / "build.h"
@@ -156,51 +170,72 @@ def patch_library_suffix(root: Path) -> None:
     if not build_h.is_file() or not enums_h.is_file():
         raise SystemExit("library_suffix submodule missing: clone Xash with --recursive")
 
+    # build.h explicitly requires every XASH_* macro introduced by the file to
+    # appear in its #undef list first. Keep this edit exact and independently
+    # guarded.
     replace_once(build_h, "#undef XASH_NSWITCH\n", "#undef XASH_NSWITCH\n#undef XASH_N64\n", "declare XASH_N64")
-    replace_once(
-        build_h,
-        "#elif defined __psp__\n #define XASH_PSP 1\n#else // POSIX compatible\n",
-        "#elif defined __psp__\n #define XASH_PSP 1\n"
-        "#elif defined N64 || defined __N64__\n #define XASH_N64 1\n"
-        "#else // POSIX compatible\n",
-        "make N64 a first-class non-POSIX platform",
-    )
-    # Do not hard-code library-suffix's numeric enum table. r9 proved that
-    # numeric values can drift independently of the source structure. Parse the
-    # pristine table, allocate the next free platform ID, then insert N64 before
-    # the XASH_PLATFORM dispatch block.
+
+    # r11 incorrectly assumed that the PSP branch was immediately adjacent to
+    # the POSIX fallback. The audited contract we actually need is simpler:
+    # N64 must be selected BEFORE the unique `#else // POSIX compatible` branch.
+    # Preserve every existing platform branch verbatim and insert only our two
+    # lines at that structural boundary.
+    lines = build_h.read_text(encoding="utf-8").splitlines(keepends=True)
+    posix_idx = _unique_line_index(lines, "#else // POSIX compatible", f"{build_h}: POSIX fallback")
+    psp_elif = [i for i, line in enumerate(lines[:posix_idx]) if line.strip() == "#elif defined __psp__"]
+    psp_define = [i for i, line in enumerate(lines[:posix_idx]) if line.strip() == "#define XASH_PSP 1"]
+    if len(psp_elif) != 1 or len(psp_define) != 1 or psp_define[0] <= psp_elif[0]:
+        raise SystemExit(f"{build_h}: audited PSP platform branch is not structurally recognizable")
+    if any(line.strip() in {"#elif defined N64 || defined __N64__", "#define XASH_N64 1"} for line in lines):
+        raise SystemExit(f"{build_h}: XASH_N64 platform detection already exists; re-audit instead of stacking edits")
+    lines[posix_idx:posix_idx] = [
+        "#elif defined N64 || defined __N64__\n",
+        " #define XASH_N64 1\n",
+    ]
+    build_h.write_text("".join(lines), encoding="utf-8")
+    print(f"patched {build_h}: insert N64 before audited POSIX fallback")
+
+    # Never hard-code library_suffix's enum numbers. Discover the current
+    # PLATFORM_* table, allocate the next free value, and append N64 to the
+    # platform-number block without depending on which platform happens to be
+    # last in this revision.
     enum_text = enums_h.read_text(encoding="utf-8")
     if re.search(r"(?m)^\s*#\s*define\s+PLATFORM_N64\b", enum_text):
         raise SystemExit("library_suffix already defines PLATFORM_N64; re-audit instead of overwriting it")
-    platform_defs = [
-        (m.group(1), int(m.group(2)))
-        for m in re.finditer(r"(?m)^\s*#\s*define\s+(PLATFORM_[A-Z0-9_]+)\s+([0-9]+)\s*(?://.*)?$", enum_text)
-    ]
+    enum_lines = enum_text.splitlines(keepends=True)
+    platform_defs: list[tuple[int, str, int]] = []
+    for i, line in enumerate(enum_lines):
+        m = re.match(r"^\s*#\s*define\s+(PLATFORM_[A-Z0-9_]+)\s+([0-9]+)\s*(?://.*)?\s*$", line.rstrip("\n"))
+        if m:
+            platform_defs.append((i, m.group(1), int(m.group(2))))
     if not platform_defs:
         raise SystemExit(f"{enums_h}: no numeric PLATFORM_* defines found")
-    if not any(name == "PLATFORM_PSP" for name, _ in platform_defs):
+    if not any(name == "PLATFORM_PSP" for _, name, _ in platform_defs):
         raise SystemExit(f"{enums_h}: PLATFORM_PSP anchor missing")
-    n64_platform_id = max(value for _, value in platform_defs) + 1
-    dispatch_anchor = "#if XASH_WIN32\n"
-    if enum_text.count(dispatch_anchor) != 1:
-        raise SystemExit(f"{enums_h}: expected exactly one XASH platform dispatch anchor")
-    enum_text = enum_text.replace(
-        dispatch_anchor,
-        f"#define PLATFORM_N64 {n64_platform_id}\n\n{dispatch_anchor}",
-        1,
-    )
-    enums_h.write_text(enum_text, encoding="utf-8")
-    print(f"patched {enums_h}: add N64 platform enum as {n64_platform_id}")
+    n64_platform_id = max(value for _, _, value in platform_defs) + 1
+    last_platform_line = max(i for i, _, _ in platform_defs)
+    enum_lines[last_platform_line + 1:last_platform_line + 1] = [f"#define PLATFORM_N64 {n64_platform_id}\n"]
 
-    replace_once(
-        enums_h,
-        "#elif XASH_PSP\n #define XASH_PLATFORM PLATFORM_PSP\n#else\n",
-        "#elif XASH_PSP\n #define XASH_PLATFORM PLATFORM_PSP\n"
-        "#elif XASH_N64\n #define XASH_PLATFORM PLATFORM_N64\n"
-        "#else\n",
-        "map N64 platform enum",
-    )
-
+    # Locate the PSP dispatch semantically rather than requiring it to be
+    # adjacent to the final #else. This survives new platform branches being
+    # inserted before or after PSP while still validating the exact mapping we
+    # are extending.
+    psp_dispatch_candidates: list[tuple[int, int]] = []
+    for i, line in enumerate(enum_lines):
+        if line.strip() != "#elif XASH_PSP":
+            continue
+        j = _next_nonblank(enum_lines, i + 1)
+        if enum_lines[j].strip() == "#define XASH_PLATFORM PLATFORM_PSP":
+            psp_dispatch_candidates.append((i, j))
+    if len(psp_dispatch_candidates) != 1:
+        raise SystemExit(f"{enums_h}: expected exactly one PSP platform dispatch, found {len(psp_dispatch_candidates)}")
+    _, psp_define_idx = psp_dispatch_candidates[0]
+    enum_lines[psp_define_idx + 1:psp_define_idx + 1] = [
+        "#elif XASH_N64\n",
+        " #define XASH_PLATFORM PLATFORM_N64\n",
+    ]
+    enums_h.write_text("".join(enum_lines), encoding="utf-8")
+    print(f"patched {enums_h}: add N64 platform enum as {n64_platform_id} and map XASH_N64 structurally")
 
 def install_backend(root: Path, overlay: Path) -> None:
     src = overlay / "engine/platform/n64/sys_n64.c"
@@ -228,7 +263,7 @@ def verify(root: Path) -> None:
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"verification failed: {needle!r} missing from {path}")
-    print("r11 N64 source integration verification: PASS")
+    print("r12 N64 source integration verification: PASS")
 
 
 def main() -> int:

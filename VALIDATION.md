@@ -1,10 +1,12 @@
-# r11 validation
+# r12 validation
 
 Validated locally before packaging:
 
 - `python3 -m py_compile`: PASS
 - Bash syntax for every shell script: PASS
-- r11 source-integration synthetic regression: PASS
+- r12 source-integration synthetic regression: PASS
+- r11 PSP/POSIX adjacency regression (extra intervening platform branch): PASS
+- library_suffix enum dispatch with an intervening post-PSP branch: PASS
 - Uplink preparation synthetic regression: PASS
 - N64 backend `gcc -std=gnu17 -Wall -Wextra -Werror -fsyntax-only`: PASS
 - static-link route guard (`--enable-static-binary` + `--static-linking=filesystem_stdio`): PASS

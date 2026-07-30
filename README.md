@@ -1,12 +1,12 @@
-# xash64-n64 r11 — real Xash3D engine bring-up
+# xash64-n64 r12 — real Xash3D engine bring-up
 
-r11 is the point where the project stops being an N64 data-path probe and starts
+r12 is the point where the project stops being an N64 data-path probe and starts
 cross-compiling **current Xash3D FWGS itself** for Nintendo 64/libdragon.
 
-The Uplink asset-prep path from r8 is preserved, but r11's main job is now the
+The Uplink asset-prep path from r8 is preserved, but r12's main job is now the
 engine build.
 
-## r11 target
+## r12 target
 
 ```text
 libdragon boot
@@ -30,16 +30,23 @@ adds `engine/platform/posix` for almost every non-Windows/non-DOS target and run
 a pthread probe for almost every non-Windows/non-Android target. N64 is therefore
 made an explicit exception rather than pretending to be Linux.
 
-r11 also does **not** patch `scripts/waifulib/xcompile.py`. The N64 build instead
+r12 also does **not** patch `scripts/waifulib/xcompile.py`. The N64 build instead
 supplies libdragon's `mips64-elf-gcc/g++` explicitly and sets the Waf target to
 `n64` in the normal root `wscript`. Current Xash's static-link helper separately
-looks up programs literally named `ld` and `objcopy`; r11 puts temporary wrappers
+looks up programs literally named `ld` and `objcopy`; r12 puts temporary wrappers
 for libdragon's `mips64-elf-ld` and `mips64-elf-objcopy` first in `PATH` so Waf
 cannot accidentally use the host binutils.
 
-The integration is one consolidated source pass with audited unique blocks. It
-aborts on upstream drift and never stacks r11 on top of an already-mutated tree.
-CI saves the resulting source diff for inspection.
+The integration is one consolidated source pass with audited structural anchors.
+It aborts on upstream drift and never stacks r12 on top of an already-mutated tree.
+r12 specifically fixes the r11 failure in `library_suffix/build.h`: the patch no
+longer assumes the PSP branch is textually adjacent to the POSIX fallback. It
+locates the unique POSIX fallback and inserts N64 immediately before it while
+preserving every existing platform branch verbatim. The enum mapping is handled
+the same way: numeric IDs are discovered from source and the PSP dispatch is
+located structurally rather than by an adjacency-sensitive replacement.
+CI saves both the resulting diff and the pristine `library_suffix` headers used
+for the run.
 
 ## N64 runtime backend
 
@@ -70,7 +77,7 @@ Your r8 run already verified the three Uplink maps inside that PAK as BSP v30.
 Upload this package as the root of a GitHub repository and run:
 
 ```text
-Actions -> Build xash64-n64 r11 engine bring-up -> Run workflow
+Actions -> Build xash64-n64 r12 engine bring-up -> Run workflow
 ```
 
 CI clones Xash3D FWGS recursively (including `3rdparty/library_suffix`), records
@@ -94,7 +101,7 @@ source assumptions, applies the guarded N64 source integration, then runs:
 The artifact is always named:
 
 ```text
-xash64-n64-r11
+xash64-n64-r12
 ```
 
 Even a failed cross-build uploads `out/`, including:
@@ -103,10 +110,13 @@ Even a failed cross-build uploads `out/`, including:
 upstream-revisions.txt
 upstream-audit.txt
 source-integration.log
-xash-r11-configure.log
-xash-r11-build.log
-xash-r11-source.diff
-library-suffix-r11-source.diff
+xash-r12-configure.log
+xash-r12-build.log
+xash-r12-source.diff
+library-suffix-r12-source.diff
+library-suffix-build.pristine.h
+library-suffix-buildenums.pristine.h
+library-suffix-revision.txt
 toolchain-version.txt
 tool-selection.txt
 ```
@@ -114,8 +124,8 @@ tool-selection.txt
 If the engine links successfully it additionally contains:
 
 ```text
-xash64-n64-r11.elf
-xash64-n64-r11.z64
+xash64-n64-r12.elf
+xash64-n64-r12.z64
 rom-sha256.txt
 rom-packaging.log
 ```
@@ -147,7 +157,7 @@ It checks:
 
 - Python compilation;
 - Bash syntax;
-- the consolidated r11 source-integration regression fixture;
+- the consolidated r12 source-integration regression fixture;
 - the existing synthetic Uplink installer/PAK tests;
 - `sys_n64.c` with GCC `-Wall -Wextra -Werror` against mocked APIs;
 - `git diff --cached --check` over the complete package.
@@ -157,7 +167,7 @@ environment because the N64 cross-toolchain is not installed here. GitHub Action
 is therefore the first real cross-compile gate, and its logs are deliberately
 preserved whether it succeeds or fails.
 
-## After r11
+## After r12
 
 Once the headless core links and boots, the order is:
 

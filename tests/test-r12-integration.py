@@ -5,7 +5,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-with tempfile.TemporaryDirectory(prefix="xash64-r11-test-") as td:
+with tempfile.TemporaryDirectory(prefix="xash64-r12-test-") as td:
     x = Path(td) / "xash"
     (x / "engine/platform").mkdir(parents=True)
     (x / "3rdparty/library_suffix/include").mkdir(parents=True)
@@ -93,6 +93,8 @@ static inline void Platform_Shutdown( void )
 #undef XASH_PSP
 #elif defined __psp__
  #define XASH_PSP 1
+#elif defined __future_console__
+ #define XASH_FUTURE_TEST 1
 #else // POSIX compatible
  #define XASH_POSIX 1
 #endif
@@ -104,6 +106,8 @@ static inline void Platform_Shutdown( void )
  #define XASH_PLATFORM PLATFORM_WIN32
 #elif XASH_PSP
  #define XASH_PLATFORM PLATFORM_PSP
+#elif XASH_FUTURE_TEST
+ #define XASH_PLATFORM PLATFORM_FUTURE_TEST
 #else
  #error
 #endif
@@ -128,10 +132,14 @@ static inline void Platform_Shutdown( void )
     assert "['win32', 'android', 'n64']" in engine_text
     assert "['win32', 'dos', 'n64']" in engine_text
     assert "DEST_OS == 'n64'" in engine_text
-    assert "XASH_N64" in (x / "3rdparty/library_suffix/include/build.h").read_text()
+    build_text = (x / "3rdparty/library_suffix/include/build.h").read_text()
+    assert "XASH_N64" in build_text
+    assert "#elif defined __future_console__\n #define XASH_FUTURE_TEST 1" in build_text
+    assert build_text.index("#elif defined N64 || defined __N64__") < build_text.index("#else // POSIX compatible")
     enum_text = (x / "3rdparty/library_suffix/include/buildenums.h").read_text()
     assert "#define PLATFORM_N64 24" in enum_text
     assert "#define XASH_PLATFORM PLATFORM_N64" in enum_text
+    assert "#elif XASH_FUTURE_TEST\n #define XASH_PLATFORM PLATFORM_FUTURE_TEST" in enum_text
     assert (x / "engine/platform/n64/sys_n64.c").is_file()
 
-print("test-r11-integration: PASS")
+print("test-r12-integration: PASS")
