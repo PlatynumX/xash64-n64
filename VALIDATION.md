@@ -1,50 +1,47 @@
-# r15 validation
+# r16 validation
 
-Evidence from the r14 GitHub Actions artifact:
+## Evidence from the r15 GitHub Actions artifact
 
-- source integration completed: PASS
-- effective Xash target after override: `os=n64 cpu=mips binfmt=elf`
-- Waf reached the real required-C-flags link probe
-- the exact command contained `-lc -ldragon -lm -ldragonsys`
-- the linker still reported unresolved libc/newlib symbols introduced by
-  `libdragon.a` and `libdragonsys.a`
-- r14 therefore disproved the simpler diagnosis that libc was merely absent
-- build stopped before Xash source compilation because the static archives
-  were not rescanned after new undefined references appeared
+- consolidated source integration completed
+- effective target was `os=n64 cpu=mips binfmt=elf`
+- required C flags probe passed
+- required C++ flags probe passed
+- GNU ld archive grouping fixed the prior libc/libdragon dependency cycle
+- large-file probe compiled with the real libdragon MIPS compiler and found
+  `sizeof(off_t) < 8`
+- retrying with `_FILE_OFFSET_BITS=64` produced the same result
+- configure stopped only because Xash treats lack of large-file support as
+  fatal for platforms without an explicit exception
 
-r15 correction:
+## r16 correction
 
-- replace the one-pass N64 library sequence with:
-  `-Wl,--start-group -lc -ldragon -lm -ldragonsys -Wl,--end-group`
-- preserve all platform/source changes from r14 unchanged
-- do not bypass Xash's mandatory C or C++ link probes
-- preserve full Waf `build/config.log` and first compile/link diagnostics
+- preserve the pinned toolchain, flags, linker script, and archive group
+- preserve all mandatory compiler/linker checks
+- extend Xash's existing no-large-file platform branch from PSVita to
+  `['psvita', 'n64']`
+- keep normal 32-bit `off_t`; do not introduce a fake ABI or seek wrapper
+- continue automatically into source compilation when configure succeeds
 
-Validated locally before packaging:
+## Local checks
 
-- Python compile for all Python scripts/tests: PASS
-- Bash syntax for every shell script: PASS
-- r15 source-integration synthetic regression: PASS
-- exact GNU ld start/end-group regression: PASS
-- real circular static-archive host link: ungrouped FAIL / grouped PASS
-- effective N64 target diagnostic insertion: PASS
-- PSP/POSIX adjacency regression: PASS
-- library_suffix enum dispatch regression: PASS
-- Uplink preparation / PAK regression: PASS
-- N64 backend `gcc -std=gnu17 -Wall -Wextra -Werror -fsyntax-only`: PASS
-- static-link route guards: PASS
-- libdragon cross `ld`/`objcopy` routing guards: PASS
-- Waf `build/config.log` capture guards in build script + workflow: PASS
-- exact pinned Xash/HLSDK/libdragon SHA guards: PASS
-- no stale `3rdparty/library-suffix` path: PASS
-- complete-package `git diff --cached --check`: PASS
+- Python syntax compilation for scripts/tests
+- Bash syntax for all shell scripts
+- guarded r16 source-integration fixture
+- exact N64 large-file exception regression
+- large-file probe remains enabled for non-N64 targets
+- circular static-archive regression
+- Uplink loose/PAK preparation regression
+- N64 backend `-Wall -Wextra -Werror` syntax check
+- pinned upstream SHA guards
+- Waf diagnostics capture guards
+- workflow YAML parse
+- package `git diff --cached --check`
+- ZIP integrity
 
-Not locally available:
+## Not locally available
 
-- libdragon's actual MIPS cross-toolchain in this execution environment
-- a live build of the pinned upstream Xash source
+- libdragon's actual MIPS cross-toolchain
+- live build of the pinned full Xash source tree
 - actual N64 ELF/ROM link
 
-The next GitHub Actions run tests this exact archive-group correction and, if
-configure passes, advances automatically to the first Xash source compiler
-frontier.
+The GitHub Actions run is the cross-compile gate.

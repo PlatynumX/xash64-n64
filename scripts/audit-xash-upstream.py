@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Guarded source audit for the Xash3D FWGS N64 bring-up.
 
-r15 deliberately audits *structure*, not historical enum numbers. r9 stopped
+r16 deliberately audits *structure*, not historical enum numbers. r9 stopped
 before source integration because library-suffix changed numeric enum values
 while preserving the API/layout we actually depend on.
 """

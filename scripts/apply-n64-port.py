@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the consolidated r15 Nintendo 64 source changes to pristine Xash3D FWGS.
+"""Apply the consolidated r16 Nintendo 64 source changes to pristine Xash3D FWGS.
 
 One source integration pass only. No generated-patch chain, no sed/regex mutation,
 and no edits to Xash's generated/minified xcompile.py. Each source edit is guarded
@@ -107,9 +107,22 @@ def patch_root_wscript(root: Path) -> None:
         "skip host dl/platform library probes",
     )
 
-    # Do not pre-emptively alter Xash's large-file feature probe. r10 never
-    # reached configure, so we have no evidence that newlib needs an exception.
-    # Let the real N64 compiler tell us at the next frontier.
+    # r15 reached the real large-file probe. Libdragon/newlib reports a
+    # 32-bit off_t and _FILE_OFFSET_BITS=64 does not change it, exactly like
+    # Xash's existing PSVita no-large-file target. Uplink's complete pak0.PAK
+    # is ~79 MiB, so signed 32-bit file offsets cover the current target data.
+    # Do not reject N64 at configure; let source compilation reveal any code
+    # that incorrectly assumes 64-bit off_t.
+    replace_once(
+        p,
+        "\telif conf.env.DEST_OS == 'psvita':\n"
+        "\t\t# PSVita don't have large file support at all\n"
+        "\t\tpass\n",
+        "\telif conf.env.DEST_OS in ['psvita', 'n64']:\n"
+        "\t\t# PSVita and libdragon/newlib N64 don't have 64-bit off_t support.\n"
+        "\t\tpass\n",
+        "accept N64 32-bit off_t like PSVita",
+    )
 
 
 def patch_engine_wscript(root: Path) -> None:
@@ -261,7 +274,7 @@ def install_backend(root: Path, overlay: Path) -> None:
 
 def verify(root: Path) -> None:
     checks = {
-        root / "wscript": ["--n64", "DEST_OS = 'n64'", "-Wl,-T,n64.ld", "LOW_MEMORY = 1"],
+        root / "wscript": ["--n64", "DEST_OS = 'n64'", "-Wl,-T,n64.ld", "LOW_MEMORY = 1", "['psvita', 'n64']"],
         root / "engine/wscript": ["'android', 'n64'", "'win32', 'dos', 'n64'", "DEST_OS == 'n64'"],
         root / "engine/platform/platform.h": ["N64_Init", "N64_Shutdown"],
         root / "3rdparty/library_suffix/include/build.h": ["XASH_N64", "defined N64 || defined __N64__"],
@@ -273,7 +286,7 @@ def verify(root: Path) -> None:
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"verification failed: {needle!r} missing from {path}")
-    print("r15 N64 source integration verification: PASS")
+    print("r16 N64 source integration verification: PASS")
 
 
 def main() -> int:

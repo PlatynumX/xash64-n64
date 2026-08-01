@@ -5,7 +5,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-with tempfile.TemporaryDirectory(prefix="xash64-r15-test-") as td:
+with tempfile.TemporaryDirectory(prefix="xash64-r16-test-") as td:
     x = Path(td) / "xash"
     (x / "engine/platform").mkdir(parents=True)
     (x / "3rdparty/library_suffix/include").mkdir(parents=True)
@@ -51,8 +51,16 @@ def configure(conf):
 \t\tconf.check_cc(lib='m')
 
 \t# set _FILE_OFFSET_BITS=64 for filesystems with 64-bit inodes
-\tif conf.env.DEST_OS != 'win32' and conf.env.DEST_SIZEOF_VOID_P == 4:
+\t# must be set globally as it changes ABI
+\tif conf.env.DEST_OS == 'android' and conf.env.DEST_SIZEOF_VOID_P == 4:
+\t\t# Android in 32-bit mode don't have good enough large file support
 \t\tpass
+\telif conf.env.DEST_OS == 'psvita':
+\t\t# PSVita don't have large file support at all
+\t\tpass
+\telse:
+\t\t# try to guess how to support large files
+\t\tconf.check_large_file(compiler = 'c', execute = False)
 """, encoding="utf-8")
 
     (x / "engine/wscript").write_text("""\
@@ -129,7 +137,9 @@ static inline void Platform_Shutdown( void )
     assert "'-Wl,--start-group', '-lc', '-ldragon', '-lm', '-ldragonsys', '-Wl,--end-group'" in root_text
     assert "if conf.env.DEST_OS == 'n64':" in root_text
     assert "elif conf.env.DEST_OS == 'nswitch':\n\t\tconf.check_cfg(package='solder'" in root_text
-    assert "if conf.env.DEST_OS != 'win32' and conf.env.DEST_SIZEOF_VOID_P == 4:" in root_text
+    assert "elif conf.env.DEST_OS in ['psvita', 'n64']:" in root_text
+    assert "libdragon/newlib N64 don't have 64-bit off_t support" in root_text
+    assert root_text.count("conf.check_large_file(compiler = 'c', execute = False)") == 1
     engine_text = (x / "engine/wscript").read_text()
     assert "['win32', 'android', 'n64']" in engine_text
     assert "['win32', 'dos', 'n64']" in engine_text
@@ -144,4 +154,4 @@ static inline void Platform_Shutdown( void )
     assert "#elif XASH_FUTURE_TEST\n #define XASH_PLATFORM PLATFORM_FUTURE_TEST" in enum_text
     assert (x / "engine/platform/n64/sys_n64.c").is_file()
 
-print("test-r15-integration: PASS")
+print("test-r16-integration: PASS")
