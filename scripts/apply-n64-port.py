@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the consolidated r14 Nintendo 64 source changes to pristine Xash3D FWGS.
+"""Apply the consolidated r15 Nintendo 64 source changes to pristine Xash3D FWGS.
 
 One source integration pass only. No generated-patch chain, no sed/regex mutation,
 and no edits to Xash's generated/minified xcompile.py. Each source edit is guarded
@@ -62,10 +62,14 @@ def patch_root_wscript(root: Path) -> None:
         "\t\tconf.env.append_unique('CFLAGS', common + ['-std=gnu17'])\n"
         "\t\tconf.env.append_unique('CXXFLAGS', common + ['-std=gnu++17'])\n"
         "\t\tconf.env.append_unique('LINKFLAGS', ['-mabi=o64', '-g', '-L%s' % n64_lib, '-Wl,-T,n64.ld', '-Wl,--gc-sections', '-Wl,--wrap=__do_global_ctors'])\n"
-        "\t\t# Match libdragon's own ELF link contract: n64.mk explicitly puts newlib libc\n"
-        "\t\t# on the link line before libdragon/libdragonsys. The r13 artifact proved that\n"
-        "\t\t# omitting -lc leaves Waf configure tests with unresolved libc/newlib symbols.\n"
-        "\t\tconf.env.append_unique('LDFLAGS', ['-lc', '-ldragon', '-lm', '-ldragonsys'])\n"
+        "\t\t# r14 proved that a single leading -lc is insufficient in Waf's one-pass\n"
+        "\t\t# static-archive order: libdragon/libdragonsys introduce libc references after\n"
+        "\t\t# libc has already been scanned, while newlib can in turn require libdragonsys.\n"
+        "\t\t# Keep the mutually dependent N64 archives in one GNU ld group so they are\n"
+        "\t\t# rescanned until no new undefined references remain.\n"
+        "\t\tconf.env.append_unique('LDFLAGS', [\n"
+        "\t\t\t'-Wl,--start-group', '-lc', '-ldragon', '-lm', '-ldragonsys', '-Wl,--end-group',\n"
+        "\t\t])\n"
         "\t\tconf.env.HAVE_M = True\n"
         "\t\tconf.env.LIB_M = ['m']\n\n",
         "configure libdragon toolchain flags",
@@ -269,7 +273,7 @@ def verify(root: Path) -> None:
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"verification failed: {needle!r} missing from {path}")
-    print("r14 N64 source integration verification: PASS")
+    print("r15 N64 source integration verification: PASS")
 
 
 def main() -> int:

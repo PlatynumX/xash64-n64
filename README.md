@@ -1,77 +1,86 @@
-# xash64-n64 r14 — fix the first real libdragon/Waf link failure
+# xash64-n64 r15 — fix the real static-archive dependency cycle
 
-r13 finally captured the exact N64 configure failure instead of a patcher error.
-
-The failing Waf link command already had the pinned libdragon linker script and
-libraries:
+r14 reached Xash's real N64 Waf configure step, but the required-C-flags link
+probe still failed. The r14 artifact proves that `-lc` was present this time:
 
 ```text
-mips64-elf-gcc ... -T n64.ld ... test.o ... -ldragon -lm -ldragonsys
+... test.o ... -lc -ldragon -lm -ldragonsys
 ```
 
-but it omitted newlib libc. The result was a large set of unresolved standard-C
-symbols pulled in by libdragon, including `strlen`, `fprintf`, `malloc`,
-`_impure_ptr`, `__errno`, and `abort`.
+The remaining unresolved symbols were introduced by archives *after* newlib
+libc had already been scanned. Libdragon and libdragonsys require libc/newlib,
+and newlib can in turn require libdragonsys system calls. A one-pass static
+archive order cannot reliably resolve that cycle.
 
-The pinned libdragon `n64.mk` used by this project explicitly links N64 ELFs
-with `-lc` before the normal libdragon link flags. r14 makes that one
-evidence-driven correction:
+r15 keeps the N64 runtime archives in one GNU ld group:
 
 ```text
--lc -ldragon -lm -ldragonsys
+-Wl,--start-group -lc -ldragon -lm -ldragonsys -Wl,--end-group
 ```
 
-No renderer, HLSDK gameplay code, or speculative compatibility patches are
-added in this revision.
+GNU ld repeatedly searches archives inside a group until no new undefined
+references are created. This directly addresses the link command captured in
+the r14 artifact; it does not skip or weaken Xash's configure checks.
 
-## r14 target
+No renderer, HLSDK gameplay code, or speculative source compatibility patches
+are added in this revision.
+
+## r15 target
 
 ```text
 pinned Xash source
   -> guarded N64 integration
   -> libdragon mips64-elf toolchain
-  -> Waf configure
-  -> newlib/libdragon link probes succeed
-  -> first real Xash compile/link frontier
+  -> Waf required C/C++ link probes pass
+  -> first actual Xash source compile frontier
 ```
 
-The successful Uplink data preparation from r8 remains unchanged:
+The successful Uplink data preparation remains unchanged:
 
 ```text
 SD:/xash/valve/pak0.PAK
 ```
 
-## Why `Target OS : linux` is not the failure
+## Evidence from r14
 
-Waf's compiler loader reports the compiler-derived target before the custom
-N64 override is applied. The r13 artifact also recorded the later effective
-target as:
+The artifact's exact required-C-flags command was:
 
 ```text
-Effective N64 target override : os=n64 cpu=mips binfmt=elf
+mips64-elf-gcc
+  -mabi=o64
+  -L/n64_toolchain/mips64-elf/lib
+  -Wl,-T,n64.ld
+  test.o
+  -lc
+  -ldragon
+  -lm
+  -ldragonsys
 ```
 
-The actual fatal error occurred during a link probe, not target dispatch.
+The linker then reported unresolved `strstr`, `fprintf`, `_impure_ptr`,
+`malloc`, `__errno`, `abort`, and related libc/newlib references from
+`libdragon.a` and `libdragonsys.a`. That proves r14's single leading `-lc` was
+scanned too early; libc was no longer absent.
 
 ## Diagnostics
 
-The GitHub Actions artifact is `xash64-n64-r14`. It always preserves:
+The GitHub Actions artifact is `xash64-n64-r15`. It always preserves:
 
 ```text
-xash-r14-configure.log
-xash-r14-waf-config.log
-xash-r14-conf-checks.tar.gz       # when Waf leaves configure-test dirs
-xash-r14-patched-wscript.txt
-xash-r14-patched-engine-wscript.txt
-xash-r14-source.diff
-library-suffix-r14-source.diff
+xash-r15-configure.log
+xash-r15-waf-config.log
+xash-r15-conf-checks.tar.gz       # when Waf leaves configure-test dirs
+xash-r15-patched-wscript.txt
+xash-r15-patched-engine-wscript.txt
+xash-r15-source.diff
+library-suffix-r15-source.diff
 tool-selection.txt
 toolchain-version.txt
 upstream-revisions.txt
 ```
 
 If configure succeeds, the workflow continues directly into `./waf build -j2
--v` and preserves that first actual compiler/linker failure.
+-v` and preserves the first actual source compiler/linker failure.
 
 ## Host validation
 
@@ -81,8 +90,8 @@ Run:
 ./tests/host-check.sh
 ```
 
-The local suite checks Python and shell syntax, the consolidated source
-integration, the exact `-lc -ldragon -lm -ldragonsys` ordering, library_suffix
-regressions, Uplink/PAK preparation, the N64 backend under
-`-Wall -Wextra -Werror`, pinned upstream SHA guards, diagnostic capture, and
-`git diff --cached --check`.
+The local suite checks Python and shell syntax, consolidated source
+integration, the exact N64 GNU ld group, a real host-side circular static
+archive regression, library_suffix regressions, Uplink/PAK preparation, the
+N64 backend under `-Wall -Wextra -Werror`, pinned upstream SHA guards,
+diagnostic capture, and `git diff --cached --check`.
