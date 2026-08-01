@@ -34,7 +34,7 @@ if cc main.o libc_mock.a libdragon_mock.a libdragonsys_mock.a -o ungrouped 2>/de
 fi
 
 # GNU ld groups rescan the mutually dependent archives until all references are
-# resolved, matching the r16 N64 link contract.
+# resolved, matching the r17 N64 link contract.
 cc main.o \
     -Wl,--start-group libc_mock.a libdragon_mock.a libdragonsys_mock.a -Wl,--end-group \
     -o grouped

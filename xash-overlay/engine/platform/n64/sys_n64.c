@@ -1,6 +1,6 @@
 /*
  * sys_n64.c - Nintendo 64/libdragon platform bring-up for Xash3D FWGS
- * Xash64 r16: real engine-core bootstrap target.
+ * Xash64 r17: real engine-core bootstrap target.
  */
 #include "platform/platform.h"
 
@@ -70,7 +70,7 @@ void N64_Init( void )
 	(void)debug_init_emulog( );
 	n64_sdfs_mounted = debug_init_sdfs( "sd:/", -1 ) ? true : false;
 
-	fprintf( stderr, "\nXash64 r16 platform init\n" );
+	fprintf( stderr, "\nXash64 r17 platform init\n" );
 	fprintf( stderr, "RAM: %lu bytes\n", (unsigned long)memory_size );
 	fprintf( stderr, "SD mount: %s\n", n64_sdfs_mounted ? "OK" : "FAILED" );
 

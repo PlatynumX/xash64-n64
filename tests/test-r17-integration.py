@@ -5,9 +5,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-with tempfile.TemporaryDirectory(prefix="xash64-r16-test-") as td:
+with tempfile.TemporaryDirectory(prefix="xash64-r17-test-") as td:
     x = Path(td) / "xash"
     (x / "engine/platform").mkdir(parents=True)
+    (x / "public").mkdir(parents=True)
     (x / "3rdparty/library_suffix/include").mkdir(parents=True)
 
     (x / "wscript").write_text("""\\
@@ -61,6 +62,20 @@ def configure(conf):
 \telse:
 \t\t# try to guess how to support large files
 \t\tconf.check_large_file(compiler = 'c', execute = False)
+""", encoding="utf-8")
+
+
+    (x / "public/miniz.c").write_text("""\
+static mz_bool mz_zip_set_file_times(const char *pFilename, MZ_TIME_T access_time, MZ_TIME_T modified_time)
+{
+    struct utimbuf t;
+
+    memset(&t, 0, sizeof(t));
+    t.actime = access_time;
+    t.modtime = modified_time;
+
+    return !utime(pFilename, &t);
+}
 """, encoding="utf-8")
 
     (x / "engine/wscript").write_text("""\
@@ -140,6 +155,10 @@ static inline void Platform_Shutdown( void )
     assert "elif conf.env.DEST_OS in ['psvita', 'n64']:" in root_text
     assert "libdragon/newlib N64 don't have 64-bit off_t support" in root_text
     assert root_text.count("conf.check_large_file(compiler = 'c', execute = False)") == 1
+    miniz_text = (x / "public/miniz.c").read_text()
+    assert "#if defined(N64) || defined(__N64__)" in miniz_text
+    assert "libdragon filesystems do not provide writable file timestamps" in miniz_text
+    assert miniz_text.count("return !utime(pFilename, &t);") == 1
     engine_text = (x / "engine/wscript").read_text()
     assert "['win32', 'android', 'n64']" in engine_text
     assert "['win32', 'dos', 'n64']" in engine_text
@@ -154,4 +173,4 @@ static inline void Platform_Shutdown( void )
     assert "#elif XASH_FUTURE_TEST\n #define XASH_PLATFORM PLATFORM_FUTURE_TEST" in enum_text
     assert (x / "engine/platform/n64/sys_n64.c").is_file()
 
-print("test-r16-integration: PASS")
+print("test-r17-integration: PASS")

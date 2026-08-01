@@ -1,64 +1,73 @@
-# xash64-n64 r16 — accept libdragon's 32-bit `off_t`
+# xash64-n64 r17 — first real Xash source portability fix
 
-r15 successfully passed Xash3D FWGS's mandatory C and C++ compiler/linker
-checks. It then stopped at Xash's large-file configure gate.
-
-The r15 artifact proves both large-file tests fail with the pinned libdragon
-MIPS toolchain:
+r16 completed Xash3D FWGS configuration and entered the real N64 build:
 
 ```text
-sizeof(off_t) >= 8                 : no
--D_FILE_OFFSET_BITS=64             : no
-There is no support for large files
+'configure' finished successfully
+[  1/222] Processing public/build_vcs.c
+...
+[  8/222] Processing public/miniz.c
 ```
 
-That is a platform capability result, not a broken compiler command. Xash
-already permits PSVita to configure without 64-bit file offsets. r16 gives N64
-the same explicit treatment:
+The first source failure is now exact and reproducible:
 
-```python
-elif conf.env.DEST_OS in ['psvita', 'n64']:
-    pass
+```text
+public/miniz.c:3504:17: error: implicit declaration of function 'utime'
 ```
 
-This is sufficient for the current Uplink target. Its complete `pak0.PAK` is
-79,150,544 bytes, well inside signed 32-bit file-offset range. The PAK remains
-intact at:
+`miniz` calls `utime()` only after extracting a ZIP member, to copy the
+archive's access/modified timestamps onto the output file. The libdragon/newlib
+N64 target does not expose a usable `utime()` entry point for this build.
+
+r17 keeps upstream behavior unchanged everywhere else. On N64 only,
+`mz_zip_set_file_times()` reports success without changing timestamps:
+
+```c
+#if defined(N64) || defined(__N64__)
+    (void)pFilename;
+    (void)access_time;
+    (void)modified_time;
+    return MZ_TRUE;
+#else
+    /* upstream utime() path */
+#endif
+```
+
+This does **not** change ZIP reads, decompression, extracted bytes, PAK access,
+or map loading. It only drops output-file timestamp metadata on N64.
+
+Half-Life/Uplink resources remain external on the SummerCart SD card:
 
 ```text
 SD:/xash/valve/pak0.PAK
 ```
 
-r16 does not redefine `off_t`, fake `_FILE_OFFSET_BITS=64`, or weaken the
-mandatory C/C++ probes. It only prevents Xash's generic desktop large-file gate
-from rejecting a console target that does not support files above 2 GiB.
+No Valve assets are included in this package or the ROM.
 
-## r16 target
+## r17 target
 
 ```text
-configure C/C++ probes pass
-  -> accept N64 32-bit off_t
-  -> complete Waf configure
-  -> enter real Xash source compilation
-  -> capture first source/compiler frontier
+complete Waf configure
+  -> compile real Xash sources
+  -> pass public/miniz.c
+  -> capture the next exact N64 compiler/linker frontier
 ```
-
-No renderer or HLSDK gameplay code is added in this revision.
 
 ## GitHub Actions artifact
 
-The workflow always uploads `xash64-n64-r16`, containing the ROM when one is
-produced or the first-frontier diagnostics otherwise:
+The workflow always uploads `xash64-n64-r17`, containing the ROM when one is
+produced or first-frontier diagnostics otherwise:
 
 ```text
-xash-r16-configure.log
-xash-r16-waf-config.log
-xash-r16-build.log
-xash-r16-conf-checks.tar.gz        # when present
-xash-r16-patched-wscript.txt
-xash-r16-patched-engine-wscript.txt
-xash-r16-source.diff
-library-suffix-r16-source.diff
+xash-r17-configure.log
+xash-r17-waf-config.log
+xash-r17-build.log
+xash-r17-conf-checks.tar.gz        # when present
+xash-r17-patched-wscript.txt
+xash-r17-patched-engine-wscript.txt
+xash-r17-source.diff
+library-suffix-r17-source.diff
+miniz.pristine.c
 tool-selection.txt
 toolchain-version.txt
 upstream-revisions.txt

@@ -1,47 +1,43 @@
-# r16 validation
+# r17 validation
 
-## Evidence from the r15 GitHub Actions artifact
+## Evidence from the r16 GitHub Actions artifact
 
-- consolidated source integration completed
-- effective target was `os=n64 cpu=mips binfmt=elf`
-- required C flags probe passed
-- required C++ flags probe passed
-- GNU ld archive grouping fixed the prior libc/libdragon dependency cycle
-- large-file probe compiled with the real libdragon MIPS compiler and found
-  `sizeof(off_t) < 8`
-- retrying with `_FILE_OFFSET_BITS=64` produced the same result
-- configure stopped only because Xash treats lack of large-file support as
-  fatal for platforms without an explicit exception
+- effective target: `os=n64 cpu=mips binfmt=elf`
+- required C and C++ flag/link probes passed
+- large-file capability was accepted as intended for N64
+- Waf configure finished successfully
+- the real build started with 222 tasks
+- the first source error occurred in `public/miniz.c`
+- exact failure: implicit declaration of `utime()` in
+  `mz_zip_set_file_times()`
 
-## r16 correction
+## r17 correction
 
-- preserve the pinned toolchain, flags, linker script, and archive group
-- preserve all mandatory compiler/linker checks
-- extend Xash's existing no-large-file platform branch from PSVita to
-  `['psvita', 'n64']`
-- keep normal 32-bit `off_t`; do not introduce a fake ABI or seek wrapper
-- continue automatically into source compilation when configure succeeds
+- preserve every r16 compiler, linker, platform, filesystem, and low-memory
+  change
+- patch the exact audited `mz_zip_set_file_times()` function once
+- keep the upstream `utime()` implementation on non-N64 platforms
+- on N64 only, skip writable timestamp restoration and return success
+- do not weaken global warning policy or suppress implicit declarations
+- preserve pristine `public/miniz.c` in the GitHub artifact
 
 ## Local checks
 
 - Python syntax compilation for scripts/tests
 - Bash syntax for all shell scripts
-- guarded r16 source-integration fixture
-- exact N64 large-file exception regression
-- large-file probe remains enabled for non-N64 targets
+- guarded r17 source-integration fixture
+- N64/non-N64 miniz timestamp-branch compile regression
+- exact N64 32-bit `off_t` exception regression
 - circular static-archive regression
 - Uplink loose/PAK preparation regression
 - N64 backend `-Wall -Wextra -Werror` syntax check
 - pinned upstream SHA guards
 - Waf diagnostics capture guards
-- workflow YAML parse
 - package `git diff --cached --check`
 - ZIP integrity
 
-## Not locally available
+## Cross-build boundary
 
-- libdragon's actual MIPS cross-toolchain
-- live build of the pinned full Xash source tree
-- actual N64 ELF/ROM link
-
-The GitHub Actions run is the cross-compile gate.
+The complete pinned Xash/libdragon MIPS build runs in GitHub Actions. The next
+artifact is expected either to contain a ROM or the next exact source/compiler
+frontier after `public/miniz.c`.

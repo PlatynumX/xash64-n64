@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the consolidated r16 Nintendo 64 source changes to pristine Xash3D FWGS.
+"""Apply the consolidated r17 Nintendo 64 source changes to pristine Xash3D FWGS.
 
 One source integration pass only. No generated-patch chain, no sed/regex mutation,
 and no edits to Xash's generated/minified xcompile.py. Each source edit is guarded
@@ -123,6 +123,50 @@ def patch_root_wscript(root: Path) -> None:
         "\t\tpass\n",
         "accept N64 32-bit off_t like PSVita",
     )
+
+
+def patch_miniz(root: Path) -> None:
+    """Skip restoring extracted-file timestamps on N64.
+
+    libdragon/newlib exposes the utimbuf type used by miniz but does not
+    declare a usable utime() entry point for this target. Timestamp restoration
+    is post-extraction metadata only; archive reads and extracted file contents
+    are unaffected. Keep every non-N64 platform on the upstream code path.
+    """
+    p = root / "public/miniz.c"
+    old = (
+        "static mz_bool mz_zip_set_file_times(const char *pFilename, MZ_TIME_T access_time, MZ_TIME_T modified_time)\n"
+        "{\n"
+        "    struct utimbuf t;\n"
+        "\n"
+        "    memset(&t, 0, sizeof(t));\n"
+        "    t.actime = access_time;\n"
+        "    t.modtime = modified_time;\n"
+        "\n"
+        "    return !utime(pFilename, &t);\n"
+        "}\n"
+    )
+    new = (
+        "static mz_bool mz_zip_set_file_times(const char *pFilename, MZ_TIME_T access_time, MZ_TIME_T modified_time)\n"
+        "{\n"
+        "#if defined(N64) || defined(__N64__)\n"
+        "    /* libdragon filesystems do not provide writable file timestamps. */\n"
+        "    (void)pFilename;\n"
+        "    (void)access_time;\n"
+        "    (void)modified_time;\n"
+        "    return MZ_TRUE;\n"
+        "#else\n"
+        "    struct utimbuf t;\n"
+        "\n"
+        "    memset(&t, 0, sizeof(t));\n"
+        "    t.actime = access_time;\n"
+        "    t.modtime = modified_time;\n"
+        "\n"
+        "    return !utime(pFilename, &t);\n"
+        "#endif\n"
+        "}\n"
+    )
+    replace_once(p, old, new, "disable unsupported N64 timestamp restoration")
 
 
 def patch_engine_wscript(root: Path) -> None:
@@ -275,6 +319,7 @@ def install_backend(root: Path, overlay: Path) -> None:
 def verify(root: Path) -> None:
     checks = {
         root / "wscript": ["--n64", "DEST_OS = 'n64'", "-Wl,-T,n64.ld", "LOW_MEMORY = 1", "['psvita', 'n64']"],
+        root / "public/miniz.c": ["defined(N64) || defined(__N64__)", "return MZ_TRUE;"],
         root / "engine/wscript": ["'android', 'n64'", "'win32', 'dos', 'n64'", "DEST_OS == 'n64'"],
         root / "engine/platform/platform.h": ["N64_Init", "N64_Shutdown"],
         root / "3rdparty/library_suffix/include/build.h": ["XASH_N64", "defined N64 || defined __N64__"],
@@ -286,7 +331,7 @@ def verify(root: Path) -> None:
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"verification failed: {needle!r} missing from {path}")
-    print("r16 N64 source integration verification: PASS")
+    print("r17 N64 source integration verification: PASS")
 
 
 def main() -> int:
@@ -298,6 +343,7 @@ def main() -> int:
     if not (root / "wscript").is_file():
         raise SystemExit(f"not a Xash3D FWGS source root: {root}")
     patch_root_wscript(root)
+    patch_miniz(root)
     patch_engine_wscript(root)
     patch_platform_header(root)
     patch_library_suffix(root)
